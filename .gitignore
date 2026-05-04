@@ -1,0 +1,30 @@
+# Claude Code 本地設定
+.claude/
+
+# 環境變數（含 API keys，絕不上 git）
+.env
+.env.local
+.env*.local
+
+# Node.js
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# 系統檔案
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 編輯器
+.vscode/
+.idea/
+*.swp
+
+# Vercel
+.vercel
