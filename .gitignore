@@ -1,30 +1,51 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
 # Claude Code 本地設定
 .claude/
 
-# 環境變數（含 API keys，絕不上 git）
-.env
-.env.local
-.env*.local
-
-# Node.js
-node_modules/
-.next/
-out/
-build/
-dist/
-
-# 系統檔案
-.DS_Store
+# editors
+.vscode/
+.idea/
 Thumbs.db
-*.log
+*.swp
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.pnpm-debug.log*
 
-# 編輯器
-.vscode/
-.idea/
-*.swp
+# env files (can opt-in for committing if needed)
+.env*
+!.env*.example
 
-# Vercel
+# vercel
 .vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
