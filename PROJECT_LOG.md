@@ -4,6 +4,94 @@
 
 ---
 
+## 2026-05-07
+
+### Phase 1 完成 ✅
+
+**資料庫**（4 份 migration）
+- `0001_initial_schema.sql`：7 張表 + 3 個 enum + 索引 + FK
+- `0002_rls_policies.sql`：RLS 啟用 + 4 個權限 helper 函式 + 各表政策
+- `0003_order_modification.sql`：order_items 加 modified_at/by/reason 三欄
+- `0004_vendor_kind_and_session_cancel.sql`：vendor_kind enum、vendors/daily_sessions 加 kind、session_status 加 cancelled、daily_sessions 取消相關欄位、kind 一致性 trigger
+- 第一個 admin 帳號已建好（手動 INSERT 到 admin_users）
+
+**認證**
+- `proxy.ts`：每次請求自動刷新 Supabase token（Next.js 16 已從 middleware 改名為 proxy）
+- `lib/auth/getCurrentAdmin.ts`：getCurrentAdmin / requireAdmin / requireRole 三個 helper
+- `lib/supabase/{client,server,admin}.ts`：三套 client（瀏覽器、Server Component、service_role）
+- `/admin/login`：Email + 密碼登入頁，含「未授權帳號」自動登出
+- 登出 server action
+
+**後台 UI**
+- `/admin/(authed)` route group：所有需登入的頁面
+- 後台 Layout：左側選單依 role 動態顯示、右下登入者 + 登出
+- 「今日總覽」（Phase 2 placeholder）
+- 「廠商與菜單」/admin/vendors：
+  - 列表分「🍱 吃的」「🥤 喝的」兩區，固定欄寬對齊
+  - 新增/編輯廠商 modal，含 kind radio 選擇
+  - 停用/啟用 toggle、刪除（FK 衝突自動擋下）
+- 「廠商菜單頁」/admin/vendors/[id]：
+  - 標頭顯示廠商分類標籤
+  - 菜單品項 CRUD + 上下排序按鈕
+- 「員工管理」/admin/employees（admin 限定）：
+  - 員工 CRUD（無 is_active）
+  - 刪除按鈕（員工被刪後歷史訂單仍保留 employee_name 快照）
+  - LINE 綁定狀態顯示（Phase 2/3 用）
+
+**測試**（手動瀏覽器）
+- ✅ 未登入訪 /admin → 自動跳 /admin/login
+- ✅ 錯密碼登入 → 紅色錯誤訊息
+- ✅ 對的密碼登入 → 進到 /admin 看到「歡迎，管理員（admin）」
+- ✅ 登出 → 跳回登入頁
+- ✅ 廠商新增（吃的/喝的）→ 列表分區顯示
+- ✅ 廠商編輯（含改分類）→ 即時更新
+- ✅ 廠商停用/啟用 → 狀態 badge 切換
+- ✅ 廠商刪除（無訂單時）→ 連同菜單一起刪
+- ✅ 菜單 CRUD + 上下排序 → 順序保存
+- ✅ 員工 CRUD + 刪除確認框
+
+**未完成**（移到後面 Phase）
+- [ ] Supabase service_role key 取得（Phase 2 寫訂單時用）
+- [ ] LINE LIFF channel（Phase 3）
+- [ ] Vercel 部署（Phase 1 結束後可開始）
+- [ ] 拍照匯入菜單品項（使用者下次有時間時做）
+
+### 開發過程中追加的需求
+
+1. **訂單修改追蹤**（餐廳缺貨換餐）：order_items 加 modified_* 三欄，UI 排 Phase 4
+2. **廠商分類「吃的／喝的」**：vendor.kind + daily_session.kind，整個系統依此分流
+3. **場次取消**：session_status 加 'cancelled'，必填取消原因，UI 排 Phase 2
+4. **廠商刪除按鈕**：原本只有停用，補上 hard delete（FK 自動保護）
+
+---
+
+## 2026-05-07（早些時候）
+
+### 新增需求：訂單修改追蹤（餐廳缺貨換餐情境）
+
+**情境**：訂餐員打電話給餐廳時，發現某員工點的東西餐廳缺貨／沒做，員工臨時改點別的餐點。需要在系統上修改已結單訂單，避免月結金額對不起來。
+
+**決策**（使用者全選 A）：
+1. **誰可以改**：admin + orderer
+2. **修改原因**：必填（例：「餐廳缺貨換咖哩飯」）
+3. **員工可見性**：訂單顯示「已由訂餐員調整」+ 修改人 + 時間 + 原因
+4. **時程**：現在（Phase 1）加資料庫欄位，UI 排到 Phase 4
+
+**Schema 變更**（`0003_order_modification.sql`）：
+- `order_items` 新增三欄：
+  - `modified_at` (timestamptz, nullable) — 修改時間，NULL 表示未被修改過
+  - `modified_by` (uuid, nullable, FK → admin_users) — 修改者
+  - `modified_reason` (text, nullable) — 修改原因（UI 上必填）
+- 補強 RLS：`order_items` 加 admin/orderer 寫入政策；`orders` 加 admin/orderer UPDATE 政策
+
+**Phase 4 待辦補充**：
+- 後台訂單詳情頁加「編輯」按鈕（admin/orderer 可見）
+- 編輯 modal：每項可改數量／換品項／刪除；底部可加新品項；必填修改原因
+- 儲存時：更新 order_items（modified_*三欄）+ 重新計算 orders.total_amount
+- 員工 LIFF 訂單顯示：「已由訂餐員 王小明 於 5/8 14:32 調整 — 餐廳缺貨換咖哩飯」
+
+---
+
 ## 2026-05-05
 
 ### Phase 0 完成 ✅

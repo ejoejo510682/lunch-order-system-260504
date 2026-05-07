@@ -43,7 +43,7 @@
    - ⚠️ **不含 is_active**，員工可由管理員直接刪除
 4. **daily_sessions**（每日訂餐場次）— id / order_date / vendor_id / status (open/closed) / auto_close_at / closed_at / created_by
 5. **orders**（訂單主表）— id / session_id / **employee_id (nullable)** / **employee_name (快照)** / total_amount / status (submitted/cancelled) / submitted_at / editable_until
-6. **order_items**（訂單明細）— id / order_id / menu_item_id / **item_name (快照)** / **item_price (快照)** / quantity
+6. **order_items**（訂單明細）— id / order_id / menu_item_id / **item_name (快照)** / **item_price (快照)** / quantity / **modified_at** / **modified_by** / **modified_reason**（後三欄為「訂餐員調整」追蹤）
 7. **admin_users**（後台帳號）— id (對應 Supabase Auth) / email / name / role (admin/orderer/accountant)
 
 ### 關鍵設計決策
@@ -109,7 +109,7 @@
 | 1 | 資料表 + RLS + 後台登入 + 廠商／菜單／員工管理 | 2-3 天 |
 | 2 | 開單／結單 + 即時訂單總覽（Supabase Realtime）+ Cron 自動結單 | 2 天 |
 | 3 | LIFF 員工端（身份選擇、菜單、送出、5 分鐘修改、訂單歷史） | 3 天 |
-| 4 | 叫貨單（B 版）+ 複製／列印 + 即時統計 | 1-2 天 |
+| 4 | 叫貨單（B 版）+ 複製／列印 + 即時統計 + **訂單修改 UI（餐廳缺貨換餐）** | 1-2 天 |
 | 5 | 週／月報表 + 個人累積 + Excel 匯出 | 1-2 天 |
 | 6 | 後台帳號 CRUD + 權限測試 + UAT | 1 天 |
 
