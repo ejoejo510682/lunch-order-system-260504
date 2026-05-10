@@ -9,7 +9,12 @@ interface SessionRow {
   vendor_id: string;
   cancelled_at: string | null;
   cancellation_reason: string | null;
-  vendor: { id: string; name: string; phone: string | null } | null;
+  vendor: {
+    id: string;
+    name: string;
+    phone: string | null;
+    menu_image_urls: string[];
+  } | null;
 }
 
 export default async function MenuPage() {
@@ -21,7 +26,7 @@ export default async function MenuPage() {
     .select(`
       id, kind, status, vendor_id,
       cancelled_at, cancellation_reason,
-      vendor:vendors ( id, name, phone )
+      vendor:vendors ( id, name, phone, menu_image_urls )
     `)
     .eq('order_date', today);
 
@@ -73,10 +78,16 @@ function buildKindData(
     return { state: 'closed' };
   }
   // status === 'open'
+  const vendor = session.vendor ?? {
+    id: session.vendor_id,
+    name: '（廠商已刪除）',
+    phone: null,
+    menu_image_urls: [],
+  };
   return {
     state: 'open',
     sessionId: session.id,
-    vendor: session.vendor ?? { id: session.vendor_id, name: '（廠商已刪除）', phone: null },
+    vendor,
     items: menuItemsByVendor[session.vendor_id] ?? [],
   };
 }

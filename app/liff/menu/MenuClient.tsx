@@ -3,12 +3,20 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { submitOrder } from './actions';
 
 export interface MenuItem {
   id: string;
   name: string;
   price: number;
+}
+
+export interface VendorWithImages {
+  id: string;
+  name: string;
+  phone: string | null;
+  menu_image_urls: string[];
 }
 
 export type KindData =
@@ -18,7 +26,7 @@ export type KindData =
   | {
       state: 'open';
       sessionId: string;
-      vendor: { id: string; name: string; phone: string | null };
+      vendor: VendorWithImages;
       items: MenuItem[];
     };
 
@@ -274,6 +282,10 @@ function KindSection({
         )}
       </div>
 
+      {kindData.vendor.menu_image_urls.length > 0 && (
+        <MenuImages urls={kindData.vendor.menu_image_urls} />
+      )}
+
       {kindData.items.length === 0 ? (
         <div className="bg-zinc-50 rounded-xl p-6 text-center text-zinc-500 text-sm">
           這個廠商還沒有上架任何品項
@@ -452,6 +464,75 @@ function CartGroup({
       </ul>
       <div className="px-4 py-2 text-xs text-zinc-600 text-right bg-zinc-50">
         小計：NT$ {subtotal}
+      </div>
+    </div>
+  );
+}
+
+function MenuImages({ urls }: { urls: string[] }) {
+  const [zoomUrl, setZoomUrl] = useState<string | null>(null);
+
+  return (
+    <>
+      <div className="space-y-2">
+        <p className="text-xs text-zinc-500">點圖片放大查看（可縮放）</p>
+        {urls.map((url, i) => (
+          <button
+            key={url}
+            type="button"
+            onClick={() => setZoomUrl(url)}
+            className="block w-full rounded-xl overflow-hidden border border-zinc-200 bg-white hover:border-zinc-300 transition"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={url}
+              alt={`菜單圖 ${i + 1}`}
+              loading="lazy"
+              className="w-full h-auto block"
+            />
+          </button>
+        ))}
+      </div>
+      {zoomUrl && <ImageZoomModal url={zoomUrl} onClose={() => setZoomUrl(null)} />}
+    </>
+  );
+}
+
+function ImageZoomModal({ url, onClose }: { url: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black flex flex-col">
+      <div className="flex items-center justify-between px-4 py-3 bg-black/80 z-10">
+        <span className="text-white text-sm">雙指縮放／拖曳查看</span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white text-lg flex items-center justify-center"
+          aria-label="關閉"
+        >
+          ✕
+        </button>
+      </div>
+      <div className="flex-1 overflow-hidden">
+        <TransformWrapper
+          initialScale={1}
+          minScale={0.5}
+          maxScale={5}
+          doubleClick={{ mode: 'toggle', step: 2 }}
+          wheel={{ step: 0.1 }}
+        >
+          <TransformComponent
+            wrapperStyle={{ width: '100%', height: '100%' }}
+            contentStyle={{ width: '100%', height: '100%' }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={url}
+              alt="菜單"
+              className="w-full h-full object-contain"
+              draggable={false}
+            />
+          </TransformComponent>
+        </TransformWrapper>
       </div>
     </div>
   );

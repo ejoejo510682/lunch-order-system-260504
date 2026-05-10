@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect } from 'react';
 import { createVendor, updateVendor, type VendorActionState } from './actions';
+import { VendorImageManager } from './VendorImageManager';
 
 interface Vendor {
   id: string;
@@ -9,6 +10,7 @@ interface Vendor {
   phone: string | null;
   note: string | null;
   kind: 'food' | 'drink';
+  menu_image_urls: string[];
 }
 
 interface Props {
@@ -112,6 +114,15 @@ export function VendorForm({ initialData, onClose }: Props) {
       {state.error && (
         <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
           {state.error}
+        </div>
+      )}
+
+      {isEdit && initialData && (
+        <div className="pt-3 border-t border-zinc-200">
+          <VendorImageManager
+            vendorId={initialData.id}
+            initialUrls={initialData.menu_image_urls ?? []}
+          />
         </div>
       )}
 

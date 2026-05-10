@@ -12,6 +12,7 @@ interface Vendor {
   note: string | null;
   is_active: boolean;
   kind: 'food' | 'drink';
+  menu_image_urls: string[];
   created_at: string;
 }
 
@@ -239,7 +240,7 @@ function Modal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-bold text-zinc-900 mb-4">{title}</h2>

@@ -4,6 +4,42 @@
 
 ---
 
+## 2026-05-11
+
+### 新增功能：廠商菜單圖片 + LIFF 縮放檢視
+
+**情境**：每間廠商有原始菜單圖（飲料店尤其常見），員工點餐時看圖比較好想像。
+
+**Schema 變更**（`0007_menu_images.sql`）：
+- `vendors` 加 `menu_image_urls text[]`（陣列，可放多張圖）
+- 建立 Supabase Storage bucket `menu-images`（公開讀取，5MB/檔，限 jpeg/png/webp）
+- Storage RLS：所有人可讀；admin/orderer 可寫入/刪除
+
+**新工具**：
+- `lib/imageCompress.ts`：瀏覽器端 Canvas 壓縮，最大寬 1920px / JPEG 80%
+- 安裝 `react-zoom-pan-pinch`：LIFF 雙指縮放與拖曳
+
+**後台**（廠商編輯 modal）：
+- 多一個「菜單圖片」區塊（僅 edit 模式顯示，create 時不顯示）
+- 多檔上傳（一次選多張，依序壓縮上傳）
+- 縮圖網格顯示，右上角 ✕ 可刪除
+- 上傳/刪除直接持久化（不需要點「更新」按鈕）
+
+**LIFF 員工端**（/liff/menu）：
+- 在每個 kind tab 下方、品項列表上方顯示菜單圖片
+- 點圖片進入全螢幕黑色 modal
+- 雙指縮放（0.5x – 5x）、拖曳平移、雙擊縮放切換
+- 右上 ✕ 關閉
+
+**部署相關**：
+- 拿掉 `vercel.json` 的 cron 設定（Hobby 方案不支援每分鐘）
+- 改用 Supabase **pg_cron** 直接在資料庫排程（每分鐘執行 UPDATE）
+- 啟用 pg_cron extension + `cron.schedule` 設好「auto-close-sessions」任務
+- 已部署到 Vercel：`https://lunch-order-system-260504.vercel.app`
+- GitHub repo 改為 public（為通過 Hobby 方案 collaboration 限制）
+
+---
+
 ## 2026-05-10
 
 ### Phase 4 完成 ✅
