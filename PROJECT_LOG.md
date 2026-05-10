@@ -6,6 +6,42 @@
 
 ## 2026-05-10
 
+### 新增功能：週結付款勾選 + LIFF 付款狀態顯示
+
+**情境**：訂餐員每週五跟員工收完款後，需要在系統上勾選「已付清」；員工自己也要在 LIFF 看得到本週是否已付。
+
+**決策**（使用者選擇）：
+- Q1 誰可以勾選付款：admin + orderer（不含 accountant）
+- Q2 標記時鎖定金額快照（避免後續訂單異動影響已付紀錄）
+- Q3 支援查看過去週次的付款紀錄
+
+**Schema 變更**（`0006_weekly_payments.sql`）：
+- 新表 `weekly_payments`：employee_id (FK SET NULL) / employee_name (snapshot) / week_start / amount / paid_at / paid_by / note
+- UNIQUE(employee_id, week_start)：同員工同週只能一筆
+- RLS：admin/orderer/accountant 可讀；admin/orderer 可寫（per Q1）
+
+**後台頁面**：`/admin/settlements`（新增到左側選單，admin + orderer）
+- 上週/本週/下週切換按鈕（URL `?week=YYYY-MM-DD`）
+- 列出本週每位員工的訂單筆數 + 累積金額 + 付款狀態
+- 「標記已付」按鈕：自動帶入金額快照與標記人
+- 「取消標記」按鈕：刪除付款紀錄
+- 已付金額與目前累積不符時，顯示警告（可能是後續訂單異動）
+- 統計卡：總人數 / 已付清 / 尚未付清
+
+**員工 LIFF**（`/liff/history`）：
+- 累積金額卡片下方加狀態橫幅：
+  - 已付清：綠色 ✓ + 已收金額 + 收款人 + 時間
+  - 未付清且金額 > 0：黃色 ⚠️ + 提醒週五繳付
+- 已付金額與累積不符時也會顯示警告
+
+**Bug 修復**：
+- `lib/week.ts`：原本 `getMonFriOfWeekContaining` 用 Taipei timezone 解析輸入但用 UTC 拿 day-of-week → 在 GMT+8 環境會偏差一天，導致「下週」按鈕點下去 URL 變了但算出來是同一週。改成全程用 `Date.UTC` 處理，YYYY-MM-DD 純日期不混時區。
+- 週查詢範圍從 Mon-Fri 改成 Mon-Sun（顯示仍是 Mon-Fri），讓週末意外送的訂單能正確歸入該週。
+
+---
+
+## 2026-05-10
+
 ### Phase 3 完成 ✅
 
 **LIFF 員工點餐前端**

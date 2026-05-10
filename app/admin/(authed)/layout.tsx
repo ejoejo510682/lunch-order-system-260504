@@ -15,11 +15,12 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: '/admin',           label: '今日總覽',     roles: ['admin', 'orderer', 'accountant'] },
-  { href: '/admin/vendors',   label: '廠商與菜單',   roles: ['admin', 'orderer'] },
-  { href: '/admin/employees', label: '員工管理',     roles: ['admin'] },
-  { href: '/admin/reports',   label: '結算報表',     roles: ['admin', 'accountant'] },
-  { href: '/admin/users',     label: '後台帳號',     roles: ['admin'] },
+  { href: '/admin',             label: '今日總覽',     roles: ['admin', 'orderer', 'accountant'] },
+  { href: '/admin/vendors',     label: '廠商與菜單',   roles: ['admin', 'orderer'] },
+  { href: '/admin/settlements', label: '週結勾選',     roles: ['admin', 'orderer'] },
+  { href: '/admin/employees',   label: '員工管理',     roles: ['admin'] },
+  { href: '/admin/reports',     label: '結算報表',     roles: ['admin', 'accountant'] },
+  { href: '/admin/users',       label: '後台帳號',     roles: ['admin'] },
 ];
 
 export default async function AuthedAdminLayout({

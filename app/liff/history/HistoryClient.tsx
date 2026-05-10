@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getWeeklyOrders, type WeeklyOrder } from './actions';
+import { getWeeklyOrders, type WeeklyOrder, type WeeklyPaymentInfo } from './actions';
 
 const STORAGE_KEY = 'lunch.identity';
 
@@ -18,6 +18,7 @@ export function HistoryClient() {
   const [orders, setOrders] = useState<WeeklyOrder[]>([]);
   const [totalAmount, setTotalAmount] = useState(0);
   const [range, setRange] = useState<{ start: string; end: string } | null>(null);
+  const [payment, setPayment] = useState<WeeklyPaymentInfo | null>(null);
 
   useEffect(() => {
     let id: SavedIdentity | null = null;
@@ -39,6 +40,7 @@ export function HistoryClient() {
         setOrders(r.orders);
         setTotalAmount(r.totalAmount);
         setRange(r.range);
+        setPayment(r.payment);
       } else {
         setError(r.error);
       }
@@ -82,6 +84,40 @@ export function HistoryClient() {
             （已扣除取消的訂單與被取消的場次）
           </p>
         </div>
+
+        {payment ? (
+          <div className="bg-green-50 border border-green-200 rounded-2xl px-5 py-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">✓</span>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-green-800">本週已付清</p>
+                <p className="text-xs text-green-700 mt-1">
+                  已收 NT$ {payment.amount}
+                  {payment.paidByName && `　收款人：${payment.paidByName}`}
+                </p>
+                <p className="text-xs text-green-600 mt-0.5">
+                  {fmtDateTime(payment.paidAt)}
+                </p>
+                {payment.amount !== totalAmount && (
+                  <p className="text-xs text-amber-700 mt-1">
+                    ⚠️ 已收金額與目前累積不同（金額被修改），如有疑問請聯絡訂餐員
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          totalAmount > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3">
+              <p className="text-sm font-medium text-amber-800">
+                ⚠️ 本週尚未付清
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                請於本週五繳付 NT$ {totalAmount}
+              </p>
+            </div>
+          )
+        )}
 
         {loading && (
           <div className="text-center text-zinc-400 text-sm py-8">載入中…</div>
@@ -159,4 +195,19 @@ function fmtDate(ymd: string): string {
   if (!ymd) return '—';
   const [, m, d] = ymd.split('-');
   return `${m}/${d}`;
+}
+
+function fmtDateTime(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat('zh-TW', {
+      timeZone: 'Asia/Taipei',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(new Date(iso));
+  } catch {
+    return '—';
+  }
 }
