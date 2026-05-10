@@ -6,6 +6,95 @@
 
 ## 2026-05-10
 
+### Phase 3 完成 ✅
+
+**LIFF 員工點餐前端**
+
+- `app/liff/layout.tsx`：手機優先版面（max-w-md 居中）
+- `app/liff/page.tsx` + `IdentitySelector.tsx`：身份選擇頁
+  - 下拉選名字 → 存 localStorage（key: `lunch.identity`）
+  - 已選過：顯示歡迎卡 + 「開始點餐」/ 「我的訂單」/「切換身份」
+  - 員工被刪除時自動清除 localStorage 並回選擇頁
+- `app/liff/menu/page.tsx` + `MenuClient.tsx`：今日菜單
+  - 撈今日所有 sessions（每 kind）+ 各自 vendor 的 active menu_items
+  - 「🍱 吃的」/「🥤 喝的」tab **只切換顯示菜單**，購物車是統一的
+  - tab 上有藍點提示對方分頁已加入東西
+  - 底部浮動購物車按鈕：`🛒 N 項 NT$X`，展開顯示分組（吃的/喝的）+ 小計
+  - 「送出」按鈕：依品項所屬廠商自動拆成 1-2 筆訂單寫入 DB
+  - 顯示場次狀態：none / closed / cancelled（含原因）/ open
+- `app/liff/menu/actions.ts`：`submitOrder` server action
+  - 用 service_role 繞過 RLS，後端嚴格驗證：
+    - 員工存在
+    - 場次為 open
+    - 品項屬於該場次廠商且 is_active
+    - 數量為正整數
+  - 寫入 `item_name` / `item_price` / `employee_name` 三組快照
+  - 設 `editable_until = submitted_at + 5 分鐘`
+  - 失敗時回滾（刪除剛插入的 order）
+- `app/liff/today/page.tsx` + `TodayClient.tsx`：「我的訂單（今日）」頁
+  - 黑色卡片顯示今日累積金額（已扣除 cancelled order/session）
+  - 每筆訂單卡片獨立顯示：kind、廠商、品項、總計、狀態 badge
+  - 5 分鐘可編輯時段：藍色倒數 + 「修改/取消」按鈕（連到詳細頁）
+  - **Realtime 訂閱**：訂單/場次任何變動即時刷新
+  - 部分送出失敗時透過 `?warn=` 帶警告訊息
+- `app/liff/orders/[id]/page.tsx` + `OrderClient.tsx`：訂單詳細
+  - 用 service_role 撈訂單（UUID 不可猜，後續操作再驗證 employee_id）
+  - 5 分鐘倒數，每秒更新
+  - 「修改訂單」modal：底部彈出菜單品項可加減 + 儲存
+  - 「取消整筆訂單」確認後標記 status=cancelled
+- `app/liff/orders/[id]/actions.ts`：`cancelOrder` / `updateOrderItems`
+  - 後端驗證：員工 ID 對應、editable_until 未過、場次仍 open
+  - 改 order_items 用「先刪後插」避免 unique 衝突
+  - 重算 orders.total_amount
+- `app/liff/history/page.tsx` + `HistoryClient.tsx`：本週訂單歷史
+  - `lib/week.ts` getThisWeekMonFri：本週 Mon-Fri
+  - 顯示本週累積 + 訂單列表（含 cancelled 標籤）
+  - 點訂單可進詳細頁
+
+**RLS 策略沒動**（一律由 LIFF actions 用 service_role 驗證+寫入）
+
+**測試**（手動瀏覽器 + LIFF 模擬）
+- ✅ 身份選擇 → localStorage → 自動帶入
+- ✅ 兩個分類同時開單，兩個 tab 切換瀏覽
+- ✅ 統一購物車：在不同 tab 加品項，底部累計、展開分組顯示
+- ✅ 一次送出 → 自動拆成 2 筆訂單寫入
+- ✅ 跳到 /liff/today，看到 2 張卡片獨立倒數
+- ✅ 修改訂單 modal、取消訂單
+- ✅ 後台 /admin Realtime 同步顯示訂單筆數/金額
+- ✅ 本週訂單頁顯示累積金額
+
+### 開發過程追加的設計變更
+
+1. **統一購物車**（使用者反饋）：原本「吃的/喝的各自有購物車各自送出」改成「統一購物車一次送出，後端拆成 2 筆」。tab 只負責切換菜單顯示，購物車和送出按鈕都是共用的。
+2. **新增 /liff/today 頁**：取代「送出後直接跳訂單詳細頁」的設計，因為一次送出可能產生 2 筆訂單，需要一個彙總頁顯示。
+
+### 未完成（移到後面 Phase）
+
+- [ ] LIFF SDK 真正初始化（要先建 LIFF Channel；本機 web 測試不需要）
+- [ ] 部署到 Vercel + 把 LIFF endpoint URL 設成 Vercel 網址
+
+---
+
+## 2026-05-10
+
+### 新增需求：週結（Mon-Fri）+ 一鍵複製 LINE 訊息
+
+**情境**：使用者希望每週五下班前產出本週結算明細，貼進 LINE 群組統一通知大家付錢。
+
+**決策**：
+- 結算報表**預設區間改為「本週 Mon-Fri」**（規格書原本是 Mon-Sun，調整為實質工作週）
+- Phase 5 加「一鍵複製成 LINE 訊息」按鈕，輸出純文字格式
+- Phase 3 員工 LIFF 加「本週累積金額」即時顯示
+- 自動寄信／LINE Bot 推播**不在本期範圍**（手動複製貼上即可滿足需求）
+
+**Phase 3 / 5 待辦補充**：
+- Phase 3：員工 LIFF 進入時顯示「本週你已點 NT$ XXX」+ 點擊看本週訂單明細
+- Phase 5：報表頁預設「本週 Mon-Fri」，含「複製為 LINE 訊息」按鈕（格式如 `王小明 NT$ 320` 一行一人）
+
+---
+
+## 2026-05-10
+
 ### Phase 2 完成 ✅
 
 **資料庫**
