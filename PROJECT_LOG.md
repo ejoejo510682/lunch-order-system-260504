@@ -4,6 +4,53 @@
 
 ---
 
+## 2026-05-10
+
+### Phase 2 完成 ✅
+
+**資料庫**
+- `0005_enable_realtime.sql`：把 `daily_sessions` / `orders` / `order_items` 加到 `supabase_realtime` publication，讓前端可訂閱即時變動
+
+**後端**
+- `lib/date.ts`：台北時區 helper（getTodayInTaipei / buildTodayTimestamp）
+- `app/admin/(authed)/actions.ts`：3 個 server action — `openSession`、`closeSession`、`cancelSession`
+  - 23505 重複鍵錯誤友善訊息
+  - cancelSession 必填原因，記錄 cancelled_by + cancelled_at + cancellation_reason
+  - closeSession / cancelSession 用 `.eq('status', 'open')` 等狀態守門，避免重複觸發
+- `app/api/cron/auto-close/route.ts`：Vercel Cron 端點
+  - 用 `service_role` key 繞過 RLS
+  - 要求 `Authorization: Bearer ${CRON_SECRET}` 才能呼叫
+  - 找出 `auto_close_at <= now() AND status='open'` 的 session 全部關掉
+- `vercel.json`：cron 排程 `* * * * *`（每分鐘）
+
+**後台 UI**
+- `app/admin/(authed)/page.tsx`（取代原 placeholder）：撈今日 sessions + active vendors + 訂單統計
+- `app/admin/(authed)/TodayOverview.tsx` 客戶端元件：
+  - 上下兩塊卡片：吃的 / 喝的
+  - 三種狀態分別顯示：未開單 / 進行中（開單時段）/ 已結單 / 已取消
+  - 開單 modal：選廠商 + 4 個自動結單快捷鈕（10:00 / 10:30 / 11:00 / 不設定）
+  - 結單按鈕（含 confirm 對話框）
+  - 取消整場 modal（必填原因、預警會影響的訂單筆數）
+  - **Supabase Realtime 訂閱**：orders / order_items / daily_sessions 任何變動 → router.refresh()
+
+**環境變數**
+- `.env.local.example` 加 `CRON_SECRET` 說明
+- 使用者已提供 `SUPABASE_SERVICE_ROLE_KEY` 到本地 `.env.local`
+
+**測試**（手動瀏覽器 + curl）
+- ✅ 開「吃的」場次（含自動結單時間）
+- ✅ 開「喝的」場次
+- ✅ 結單 → 狀態變灰
+- ✅ 取消整場（含原因填寫）→ 狀態變紅，顯示原因
+- ✅ Cron API：`Invoke-RestMethod` 帶 `Authorization` header → 回傳 `closed: 1` + 自動關掉過期的 session
+- ✅ Realtime：Cron 關掉 session 後，分頁無 F5 即時更新成「已結單」
+
+**未完成**（移到後面 Phase）
+- [ ] 部署到 Vercel + 後台設 env vars（讓 Cron 真的每分鐘自動跑）
+- [ ] 員工 LIFF 點餐（Phase 3）
+
+---
+
 ## 2026-05-07
 
 ### Phase 1 完成 ✅
