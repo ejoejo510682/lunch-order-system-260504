@@ -12,7 +12,13 @@ export interface WeeklyOrder {
   kind: 'food' | 'drink';
   vendor_name: string | null;
   session_status: 'open' | 'closed' | 'cancelled';
-  items: { item_name: string; item_price: number; quantity: number }[];
+  items: {
+    item_name: string;
+    item_price: number;
+    quantity: number;
+    modified_at: string | null;
+  }[];
+  is_modified: boolean;
 }
 
 export interface WeeklyPaymentInfo {
@@ -53,7 +59,7 @@ export async function getWeeklyOrders(employeeId: string): Promise<WeeklyResult 
     .select(`
       id, total_amount, status, submitted_at,
       session:daily_sessions ( order_date, kind, status, vendor:vendors ( name ) ),
-      items:order_items ( item_name, item_price, quantity )
+      items:order_items ( item_name, item_price, quantity, modified_at )
     `)
     .eq('employee_id', employeeId)
     .gte('submitted_at', `${range.start}T00:00:00+08:00`)
@@ -62,6 +68,7 @@ export async function getWeeklyOrders(employeeId: string): Promise<WeeklyResult 
 
   if (error) return { ok: false, error: `查詢失敗：${error.message}` };
 
+  type RawItem = { item_name: string; item_price: number; quantity: number; modified_at: string | null };
   type RawOrder = {
     id: string;
     total_amount: number;
@@ -73,7 +80,7 @@ export async function getWeeklyOrders(employeeId: string): Promise<WeeklyResult 
       status: 'open' | 'closed' | 'cancelled';
       vendor: { name: string } | null;
     } | null;
-    items: { item_name: string; item_price: number; quantity: number }[];
+    items: RawItem[];
   };
 
   const formatted: WeeklyOrder[] = (orders as unknown as RawOrder[] ?? []).map((o) => ({
@@ -86,6 +93,7 @@ export async function getWeeklyOrders(employeeId: string): Promise<WeeklyResult 
     vendor_name:    o.session?.vendor?.name ?? null,
     session_status: o.session?.status ?? 'open',
     items:          o.items ?? [],
+    is_modified:    (o.items ?? []).some((it) => it.modified_at !== null),
   }));
 
   // 累積金額：扣除個人 cancelled 訂單與 cancelled session

@@ -148,7 +148,12 @@ export function HistoryClient() {
                     <span className="text-xs text-zinc-500">
                       {fmtDate(o.order_date)}　{o.kind === 'food' ? '🍱' : '🥤'} {o.vendor_name ?? '—'}
                     </span>
-                    <OrderStatusBadge order={o} />
+                    <div className="flex items-center gap-1">
+                      {o.is_modified && o.status !== 'cancelled' && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">已調整</span>
+                      )}
+                      <OrderStatusBadge order={o} />
+                    </div>
                   </div>
                   <ul className="text-sm text-zinc-700 mb-1">
                     {o.items.map((it, i) => (
@@ -199,7 +204,7 @@ function fmtDate(ymd: string): string {
 
 function fmtDateTime(iso: string): string {
   try {
-    return new Intl.DateTimeFormat('zh-TW', {
+    return new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Taipei',
       month: '2-digit',
       day: '2-digit',

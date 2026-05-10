@@ -17,6 +17,9 @@ export interface OrderItem {
   item_name: string;
   item_price: number;
   quantity: number;
+  modified_at: string | null;
+  modified_reason: string | null;
+  modified_by_admin: { name: string } | null;
 }
 
 export interface OrderData {
@@ -79,6 +82,7 @@ export function OrderClient({
 
       <main className="flex-1 px-5 space-y-4 pb-6">
         <StatusBanner order={order} canStillModify={canStillModify} sessionOpen={sessionOpen} />
+        <ModifiedBanner order={order} />
 
         {canStillModify && (
           <CountdownBar minutes={remainingMin} seconds={remainingSec} />
@@ -160,6 +164,35 @@ export function OrderClient({
           }}
           onError={setActionError}
         />
+      )}
+    </div>
+  );
+}
+
+function ModifiedBanner({ order }: { order: OrderData }) {
+  const modified = [...order.items]
+    .filter((it) => it.modified_at !== null)
+    .sort((a, b) => (b.modified_at ?? '').localeCompare(a.modified_at ?? ''))[0];
+  if (!modified) return null;
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm">
+      <p className="font-medium text-amber-800">⚠️ 訂單已由訂餐員調整</p>
+      <p className="text-amber-700 mt-1">
+        原因：{modified.modified_reason ?? '（未填）'}
+      </p>
+      {(modified.modified_by_admin?.name || modified.modified_at) && (
+        <p className="text-xs text-amber-600 mt-0.5">
+          {modified.modified_by_admin?.name && `${modified.modified_by_admin.name}　`}
+          {modified.modified_at && new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Taipei',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+          }).format(new Date(modified.modified_at))}
+        </p>
       )}
     </div>
   );
@@ -370,7 +403,7 @@ function EditModal({
 
 function formatDateTime(iso: string): string {
   try {
-    return new Intl.DateTimeFormat('zh-TW', {
+    return new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Taipei',
       month: '2-digit',
       day: '2-digit',

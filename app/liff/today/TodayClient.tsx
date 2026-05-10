@@ -194,18 +194,40 @@ function OrderCard({ order }: { order: TodayOrder }) {
     statusBadge = <span className="text-xs px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600">已送出</span>;
   }
 
+  // 找出最後一個被修改的品項（取最新的 modified_at），顯示原因
+  const modifiedItem = [...order.items]
+    .filter((it) => it.modified_at !== null)
+    .sort((a, b) => (b.modified_at ?? '').localeCompare(a.modified_at ?? ''))[0];
+  const isModified = !!modifiedItem;
+
   return (
     <li className="bg-white border border-zinc-200 rounded-xl overflow-hidden">
       <div className="px-4 py-3 border-b border-zinc-100 flex items-center justify-between">
         <span className="text-sm font-medium text-zinc-900">
           {kindEmoji} {order.vendor_name ?? '—'}
         </span>
-        {statusBadge}
+        <div className="flex items-center gap-1">
+          {isModified && order.status !== 'cancelled' && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">已調整</span>
+          )}
+          {statusBadge}
+        </div>
       </div>
 
       {order.session_status === 'cancelled' && order.session_cancel_reason && (
         <div className="px-4 py-2 bg-red-50 text-xs text-red-700 border-b border-red-100">
           場次取消原因：{order.session_cancel_reason}
+        </div>
+      )}
+
+      {isModified && modifiedItem && order.status !== 'cancelled' && (
+        <div className="px-4 py-2 bg-amber-50 text-xs text-amber-800 border-b border-amber-100">
+          <p>
+            <span className="font-medium">已由</span>
+            {modifiedItem.modified_by_name && ` ${modifiedItem.modified_by_name} `}
+            <span className="font-medium">調整</span>
+            ：{modifiedItem.modified_reason ?? '（未填原因）'}
+          </p>
         </div>
       )}
 
@@ -247,7 +269,7 @@ function OrderCard({ order }: { order: TodayOrder }) {
 
 function formatTime(iso: string): string {
   try {
-    return new Intl.DateTimeFormat('zh-TW', {
+    return new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Taipei',
       hour: '2-digit',
       minute: '2-digit',

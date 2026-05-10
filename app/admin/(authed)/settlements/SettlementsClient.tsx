@@ -222,7 +222,7 @@ function Stat({
 
 function fmtDateTime(iso: string): string {
   try {
-    return new Intl.DateTimeFormat('zh-TW', {
+    return new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Taipei',
       month: '2-digit',
       day: '2-digit',

@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import {
   openSession,
@@ -185,6 +186,17 @@ function SessionCard({
         )}
       </div>
 
+      {session && (
+        <div className="px-6 py-3 bg-zinc-50 border-t border-zinc-100">
+          <Link
+            href={`/admin/sessions/${session.id}`}
+            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+          >
+            查看訂單明細與叫貨單 →
+          </Link>
+        </div>
+      )}
+
       {dialog.mode === 'open' && (
         <Modal title={`開單：${label}`} onClose={closeDialog}>
           <OpenSessionForm kind={kind} vendors={vendors} onClose={closeDialog} />
@@ -317,7 +329,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 function formatTime(iso: string | null): string | null {
   if (!iso) return null;
   try {
-    return new Intl.DateTimeFormat('zh-TW', {
+    return new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Taipei',
       hour: '2-digit',
       minute: '2-digit',
