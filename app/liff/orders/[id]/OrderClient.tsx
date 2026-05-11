@@ -302,37 +302,30 @@ function EditModal({
   onError: (e: string | null) => void;
 }) {
   const router = useRouter();
-  const [cart, setCart] = useState<Record<string, { qty: number; note: string }>>(() => {
-    const map: Record<string, { qty: number; note: string }> = {};
+  const [cart, setCart] = useState<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
     for (const it of order.items) {
-      if (it.menu_item_id) {
-        map[it.menu_item_id] = { qty: it.quantity, note: it.note ?? '' };
-      }
+      if (it.menu_item_id) map[it.menu_item_id] = it.quantity;
     }
     return map;
   });
+  // 一筆訂單共用一個備註，初始值取自任一品項的 note
+  const [orderNote, setOrderNote] = useState(
+    order.items.find((it) => it.note)?.note ?? '',
+  );
   const [pending, startTransition] = useTransition();
 
-  const total = menuItems.reduce((s, m) => s + m.price * (cart[m.id]?.qty ?? 0), 0);
-  const count = Object.values(cart).reduce((s, c) => s + c.qty, 0);
+  const total = menuItems.reduce((s, m) => s + m.price * (cart[m.id] ?? 0), 0);
+  const count = Object.values(cart).reduce((s, q) => s + q, 0);
 
   const setQty = (id: string, delta: number) => {
     setCart((prev) => {
       const next = { ...prev };
-      const cur = next[id];
-      const curQty = cur?.qty ?? 0;
-      const nv = Math.max(0, curQty + delta);
+      const cur = next[id] ?? 0;
+      const nv = Math.max(0, cur + delta);
       if (nv === 0) delete next[id];
-      else next[id] = { qty: nv, note: cur?.note ?? '' };
+      else next[id] = nv;
       return next;
-    });
-  };
-
-  const setNote = (id: string, note: string) => {
-    setCart((prev) => {
-      const cur = prev[id];
-      if (!cur) return prev;
-      return { ...prev, [id]: { qty: cur.qty, note } };
     });
   };
 
@@ -342,10 +335,10 @@ function EditModal({
       return;
     }
     onError(null);
-    const items = Object.entries(cart).map(([menuItemId, c]) => ({
+    const items = Object.entries(cart).map(([menuItemId, quantity]) => ({
       menuItemId,
-      quantity: c.qty,
-      note: c.note,
+      quantity,
+      note: orderNote,
     }));
     startTransition(async () => {
       const r = await updateOrderItems({ orderId: order.id, employeeId: order.employee_id, items });
@@ -374,48 +367,50 @@ function EditModal({
 
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
           {menuItems.map((m) => {
-            const entry = cart[m.id];
-            const qty = entry?.qty ?? 0;
+            const qty = cart[m.id] ?? 0;
             return (
-              <div key={m.id} className="bg-white border border-zinc-200 rounded-xl px-4 py-3 space-y-2">
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-zinc-900 truncate">{m.name}</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">NT$ {m.price}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setQty(m.id, -1)}
-                      disabled={qty === 0 || pending}
-                      className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-lg flex items-center justify-center disabled:opacity-30"
-                    >
-                      −
-                    </button>
-                    <span className="min-w-[1.5rem] text-center text-sm font-semibold text-zinc-900">{qty}</span>
-                    <button
-                      type="button"
-                      onClick={() => setQty(m.id, 1)}
-                      disabled={pending}
-                      className="w-8 h-8 rounded-full bg-zinc-900 hover:bg-zinc-800 text-white text-lg flex items-center justify-center"
-                    >
-                      +
-                    </button>
-                  </div>
+              <div key={m.id} className="bg-white border border-zinc-200 rounded-xl px-4 py-3 flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-zinc-900 truncate">{m.name}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">NT$ {m.price}</p>
                 </div>
-                {qty > 0 && (
-                  <input
-                    type="text"
-                    value={entry?.note ?? ''}
-                    onChange={(e) => setNote(m.id, e.target.value)}
-                    placeholder="備註（少糖、加料、不要香菜...）"
-                    maxLength={100}
-                    className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-100 outline-none"
-                  />
-                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setQty(m.id, -1)}
+                    disabled={qty === 0 || pending}
+                    className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-lg flex items-center justify-center disabled:opacity-30"
+                  >
+                    −
+                  </button>
+                  <span className="min-w-[1.5rem] text-center text-sm font-semibold text-zinc-900">{qty}</span>
+                  <button
+                    type="button"
+                    onClick={() => setQty(m.id, 1)}
+                    disabled={pending}
+                    className="w-8 h-8 rounded-full bg-zinc-900 hover:bg-zinc-800 text-white text-lg flex items-center justify-center"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             );
           })}
+
+          <div className="bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 space-y-2">
+            <label className="block text-xs text-zinc-600">
+              📝 備註（這份訂單的注意事項）
+            </label>
+            <input
+              type="text"
+              value={orderNote}
+              onChange={(e) => setOrderNote(e.target.value)}
+              placeholder="少糖、加料、不要香菜...（不需要可留空）"
+              maxLength={200}
+              disabled={pending}
+              className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-100 outline-none"
+            />
+          </div>
         </div>
 
         <div className="px-4 py-3 border-t border-zinc-200 flex items-center gap-3">
