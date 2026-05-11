@@ -16,6 +16,7 @@ export interface WeeklyOrder {
     item_name: string;
     item_price: number;
     quantity: number;
+    note: string | null;
     modified_at: string | null;
   }[];
   is_modified: boolean;
@@ -59,7 +60,7 @@ export async function getWeeklyOrders(employeeId: string): Promise<WeeklyResult 
     .select(`
       id, total_amount, status, submitted_at,
       session:daily_sessions ( order_date, kind, status, vendor:vendors ( name ) ),
-      items:order_items ( item_name, item_price, quantity, modified_at )
+      items:order_items ( item_name, item_price, quantity, note, modified_at )
     `)
     .eq('employee_id', employeeId)
     .gte('submitted_at', `${range.start}T00:00:00+08:00`)
@@ -68,7 +69,7 @@ export async function getWeeklyOrders(employeeId: string): Promise<WeeklyResult 
 
   if (error) return { ok: false, error: `查詢失敗：${error.message}` };
 
-  type RawItem = { item_name: string; item_price: number; quantity: number; modified_at: string | null };
+  type RawItem = { item_name: string; item_price: number; quantity: number; note: string | null; modified_at: string | null };
   type RawOrder = {
     id: string;
     total_amount: number;

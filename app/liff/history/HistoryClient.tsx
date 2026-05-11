@@ -155,10 +155,15 @@ export function HistoryClient() {
                       <OrderStatusBadge order={o} />
                     </div>
                   </div>
-                  <ul className="text-sm text-zinc-700 mb-1">
+                  <ul className="text-sm text-zinc-700 mb-1 space-y-0.5">
                     {o.items.map((it, i) => (
-                      <li key={i} className="truncate">
-                        {it.item_name} × {it.quantity}
+                      <li key={i}>
+                        <div className="truncate">
+                          {it.item_name} × {it.quantity}
+                        </div>
+                        {it.note && (
+                          <div className="text-xs text-blue-700 truncate">📝 {it.note}</div>
+                        )}
                       </li>
                     ))}
                   </ul>

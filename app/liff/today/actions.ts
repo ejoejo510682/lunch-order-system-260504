@@ -17,6 +17,7 @@ export interface TodayOrder {
     item_name: string;
     item_price: number;
     quantity: number;
+    note: string | null;
     modified_at: string | null;
     modified_reason: string | null;
     modified_by_name: string | null;
@@ -54,7 +55,7 @@ export async function getTodayOrders(employeeId: string): Promise<TodayResult | 
       id, total_amount, status, submitted_at, editable_until,
       session:daily_sessions ( order_date, kind, status, cancellation_reason, vendor:vendors ( name ) ),
       items:order_items (
-        item_name, item_price, quantity,
+        item_name, item_price, quantity, note,
         modified_at, modified_reason,
         modified_by_admin:admin_users!order_items_modified_by_fkey ( name )
       )
@@ -68,6 +69,7 @@ export async function getTodayOrders(employeeId: string): Promise<TodayResult | 
     item_name: string;
     item_price: number;
     quantity: number;
+    note: string | null;
     modified_at: string | null;
     modified_reason: string | null;
     modified_by_admin: { name: string } | null;
@@ -104,6 +106,7 @@ export async function getTodayOrders(employeeId: string): Promise<TodayResult | 
         item_name:        it.item_name,
         item_price:       it.item_price,
         quantity:         it.quantity,
+        note:             it.note,
         modified_at:      it.modified_at,
         modified_reason:  it.modified_reason,
         modified_by_name: it.modified_by_admin?.name ?? null,

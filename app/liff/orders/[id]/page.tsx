@@ -24,7 +24,7 @@ export default async function OrderPage({ params }: Props) {
         vendor:vendors ( id, name, phone )
       ),
       items:order_items (
-        id, menu_item_id, item_name, item_price, quantity,
+        id, menu_item_id, item_name, item_price, quantity, note,
         modified_at, modified_reason,
         modified_by_admin:admin_users!order_items_modified_by_fkey ( name )
       )

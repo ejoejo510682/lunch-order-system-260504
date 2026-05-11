@@ -233,10 +233,17 @@ function OrderCard({ order }: { order: TodayOrder }) {
 
       <ul className="divide-y divide-zinc-100">
         {order.items.map((it, i) => (
-          <li key={i} className="px-4 py-2.5 flex items-center text-sm">
-            <span className="flex-1 truncate text-zinc-700">{it.item_name}</span>
-            <span className="text-xs text-zinc-500 mr-3">×{it.quantity}</span>
-            <span className="font-medium text-zinc-900">NT$ {it.item_price * it.quantity}</span>
+          <li key={i} className="px-4 py-2.5 text-sm">
+            <div className="flex items-center">
+              <span className="flex-1 truncate text-zinc-700">{it.item_name}</span>
+              <span className="text-xs text-zinc-500 mr-3">×{it.quantity}</span>
+              <span className="font-medium text-zinc-900">NT$ {it.item_price * it.quantity}</span>
+            </div>
+            {it.note && (
+              <p className="mt-1 text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded inline-block">
+                📝 {it.note}
+              </p>
+            )}
           </li>
         ))}
       </ul>

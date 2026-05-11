@@ -31,6 +31,7 @@ export interface OrderForAdmin {
     item_name: string;
     item_price: number;
     quantity: number;
+    note: string | null;
     modified_at: string | null;
     modified_reason: string | null;
     modified_by_admin: { name: string } | null;
@@ -174,7 +175,7 @@ interface AggregatedItem {
   name: string;
   price: number;
   count: number;
-  buyers: { name: string; quantity: number }[];
+  buyers: { name: string; quantity: number; note: string | null }[];
 }
 
 function PurchaseList({
@@ -187,27 +188,33 @@ function PurchaseList({
   const [copied, setCopied] = useState(false);
 
   // 聚合品項 (item_name + item_price 為一組，因為改價後同名不同價)
+  // 每個買家獨立列一筆（同人不同備註要分開顯示）
   const map = new Map<string, AggregatedItem>();
   for (const order of orders) {
     for (const item of order.items) {
       const key = `${item.item_name}__${item.item_price}`;
       const existing = map.get(key);
+      const buyer = { name: order.employee_name, quantity: item.quantity, note: item.note };
       if (existing) {
         existing.count += item.quantity;
-        const buyer = existing.buyers.find((b) => b.name === order.employee_name);
-        if (buyer) buyer.quantity += item.quantity;
-        else existing.buyers.push({ name: order.employee_name, quantity: item.quantity });
+        existing.buyers.push(buyer);
       } else {
         map.set(key, {
           name:   item.item_name,
           price:  item.item_price,
           count:  item.quantity,
-          buyers: [{ name: order.employee_name, quantity: item.quantity }],
+          buyers: [buyer],
         });
       }
     }
   }
   const aggregated = Array.from(map.values()).sort((a, b) => b.count - a.count);
+
+  const formatBuyer = (b: { name: string; quantity: number; note: string | null }): string => {
+    const qtyPart  = b.quantity > 1 ? `（${b.quantity}份）` : '';
+    const notePart = b.note ? ` 📝${b.note}` : '';
+    return `${b.name}${qtyPart}${notePart}`;
+  };
 
   const totalCount = aggregated.reduce((s, a) => s + a.count, 0);
   const totalAmount = aggregated.reduce((s, a) => s + a.count * a.price, 0);
@@ -220,9 +227,7 @@ function PurchaseList({
     lines.push('');
     for (const a of aggregated) {
       lines.push(`${a.name} ×${a.count}`);
-      const buyersText = a.buyers
-        .map((b) => (b.quantity > 1 ? `${b.name}（${b.quantity}份）` : b.name))
-        .join('、');
+      const buyersText = a.buyers.map(formatBuyer).join('、');
       lines.push(`  - ${buyersText}`);
     }
     lines.push('──────────────');
@@ -284,9 +289,7 @@ function PurchaseList({
                 <span className="text-xs text-zinc-400 ml-2 font-normal">NT$ {a.price}/份</span>
               </div>
               <div className="text-zinc-600 ml-3 mt-0.5">
-                - {a.buyers
-                  .map((b) => (b.quantity > 1 ? `${b.name}（${b.quantity}份）` : b.name))
-                  .join('、')}
+                - {a.buyers.map(formatBuyer).join('、')}
               </div>
             </li>
           ))}
@@ -358,10 +361,17 @@ function OrderCard({
 
       <ul className="divide-y divide-zinc-100">
         {order.items.map((item) => (
-          <li key={item.id} className="px-4 py-2 flex items-center text-sm">
-            <span className="flex-1 text-zinc-700 truncate">{item.item_name}</span>
-            <span className="text-xs text-zinc-500 mr-3">×{item.quantity}</span>
-            <span className="text-zinc-900 font-medium">NT$ {item.item_price * item.quantity}</span>
+          <li key={item.id} className="px-4 py-2 text-sm">
+            <div className="flex items-center">
+              <span className="flex-1 text-zinc-700 truncate">{item.item_name}</span>
+              <span className="text-xs text-zinc-500 mr-3">×{item.quantity}</span>
+              <span className="text-zinc-900 font-medium">NT$ {item.item_price * item.quantity}</span>
+            </div>
+            {item.note && (
+              <div className="mt-1 text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded inline-block">
+                📝 {item.note}
+              </div>
+            )}
           </li>
         ))}
       </ul>
@@ -405,6 +415,7 @@ interface EditableItem {
   item_name: string;
   item_price: number;
   quantity: number;
+  note: string;
 }
 
 let nextTempId = 1;
@@ -426,6 +437,7 @@ function EditOrderModal({
       item_name:    it.item_name,
       item_price:   it.item_price,
       quantity:     it.quantity,
+      note:         it.note ?? '',
     })),
   );
   const [reason, setReason] = useState('');
@@ -451,6 +463,7 @@ function EditOrderModal({
         item_name:    m.name,
         item_price:   m.price,
         quantity:     1,
+        note:         '',
       },
     ]);
   };
@@ -464,6 +477,7 @@ function EditOrderModal({
         item_name:    '',
         item_price:   0,
         quantity:     1,
+        note:         '',
       },
     ]);
   };
@@ -491,6 +505,7 @@ function EditOrderModal({
           item_name:    it.item_name,
           item_price:   it.item_price,
           quantity:     it.quantity,
+          note:         it.note,
         })),
         reason,
       });
@@ -571,6 +586,15 @@ function EditOrderModal({
                     NT$ {it.item_price * it.quantity}
                   </span>
                 </div>
+                <input
+                  type="text"
+                  value={it.note}
+                  onChange={(e) => updateItem(it.tempId, { note: e.target.value })}
+                  placeholder="員工備註（少糖、加料、不要香菜...）"
+                  maxLength={100}
+                  disabled={pending}
+                  className="w-full px-3 py-1.5 rounded border border-zinc-300 text-xs bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-100 outline-none"
+                />
               </div>
             ))}
           </div>

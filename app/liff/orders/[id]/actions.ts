@@ -45,7 +45,7 @@ export async function cancelOrder({ orderId, employeeId }: BaseInput): Promise<C
 }
 
 export interface UpdateOrderInput extends BaseInput {
-  items: { menuItemId: string; quantity: number }[];
+  items: { menuItemId: string; quantity: number; note?: string }[];
 }
 
 export interface UpdateOrderResult {
@@ -105,12 +105,14 @@ export async function updateOrderItems({
   const priceMap = new Map(menuItems.map((m) => [m.id, m]));
   const newOrderItems = items.map((it) => {
     const m = priceMap.get(it.menuItemId)!;
+    const trimmedNote = it.note?.trim() ?? '';
     return {
       order_id:     orderId,
       menu_item_id: m.id,
       item_name:    m.name,
       item_price:   m.price,
       quantity:     it.quantity,
+      note:         trimmedNote || null,
     };
   });
   const newTotal = newOrderItems.reduce((s, oi) => s + oi.item_price * oi.quantity, 0);

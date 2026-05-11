@@ -56,8 +56,8 @@ export function MenuClient({
   const [identity, setIdentity] = useState<SavedIdentity | null>(null);
   const [identityLoaded, setIdentityLoaded] = useState(false);
 
-  // 統一購物車：menuItemId → quantity
-  const [cart, setCart] = useState<Record<string, number>>({});
+  // 統一購物車：menuItemId → { qty, note }
+  const [cart, setCart] = useState<Record<string, { qty: number; note: string }>>({});
 
   const visibleKinds: Kind[] = [];
   if (food.state !== 'none')  visibleKinds.push('food');
@@ -97,10 +97,13 @@ export function MenuClient({
   const currentData = activeKind === 'food' ? food : drink;
 
   // 計算購物車內容（依 kind 分組）
-  const groupCart = (kindData: KindData): { items: (MenuItem & { qty: number })[]; subtotal: number } => {
+  const groupCart = (kindData: KindData): { items: (MenuItem & { qty: number; note: string })[]; subtotal: number } => {
     if (kindData.state !== 'open') return { items: [], subtotal: 0 };
     const items = kindData.items
-      .map((it) => ({ ...it, qty: cart[it.id] ?? 0 }))
+      .map((it) => {
+        const entry = cart[it.id];
+        return { ...it, qty: entry?.qty ?? 0, note: entry?.note ?? '' };
+      })
       .filter((it) => it.qty > 0);
     const subtotal = items.reduce((s, it) => s + it.price * it.qty, 0);
     return { items, subtotal };
@@ -114,11 +117,20 @@ export function MenuClient({
   const handleQuantity = (itemId: string, delta: number) => {
     setCart((prev) => {
       const next = { ...prev };
-      const cur = next[itemId] ?? 0;
-      const nv = Math.max(0, cur + delta);
+      const cur = next[itemId];
+      const curQty = cur?.qty ?? 0;
+      const nv = Math.max(0, curQty + delta);
       if (nv === 0) delete next[itemId];
-      else next[itemId] = nv;
+      else next[itemId] = { qty: nv, note: cur?.note ?? '' };
       return next;
+    });
+  };
+
+  const handleNote = (itemId: string, note: string) => {
+    setCart((prev) => {
+      const cur = prev[itemId];
+      if (!cur) return prev;
+      return { ...prev, [itemId]: { qty: cur.qty, note } };
     });
   };
 
@@ -135,7 +147,7 @@ export function MenuClient({
         const r = await submitOrder({
           employeeId: identity.id,
           sessionId:  food.sessionId,
-          items:      foodCart.items.map((it) => ({ menuItemId: it.id, quantity: it.qty })),
+          items:      foodCart.items.map((it) => ({ menuItemId: it.id, quantity: it.qty, note: it.note })),
         });
         if (r.ok) orderIds.push(r.orderId);
         else errors.push(`吃的：${r.error}`);
@@ -146,7 +158,7 @@ export function MenuClient({
         const r = await submitOrder({
           employeeId: identity.id,
           sessionId:  drink.sessionId,
-          items:      drinkCart.items.map((it) => ({ menuItemId: it.id, quantity: it.qty })),
+          items:      drinkCart.items.map((it) => ({ menuItemId: it.id, quantity: it.qty, note: it.note })),
         });
         if (r.ok) orderIds.push(r.orderId);
         else errors.push(`喝的：${r.error}`);
@@ -222,6 +234,7 @@ export function MenuClient({
           onToggle={() => setCartExpanded((v) => !v)}
           onSubmit={handleSubmit}
           onQuantity={handleQuantity}
+          onNote={handleNote}
         />
       )}
     </div>
@@ -251,7 +264,7 @@ function KindSection({
   onQuantity,
 }: {
   kindData: KindData;
-  cart: Record<string, number>;
+  cart: Record<string, { qty: number; note: string }>;
   onQuantity: (itemId: string, delta: number) => void;
 }) {
   if (kindData.state === 'closed') {
@@ -293,7 +306,7 @@ function KindSection({
       ) : (
         <ul className="space-y-2">
           {kindData.items.map((item) => {
-            const qty = cart[item.id] ?? 0;
+            const qty = cart[item.id]?.qty ?? 0;
             return (
               <li
                 key={item.id}
@@ -361,11 +374,12 @@ function CartBar({
   onToggle,
   onSubmit,
   onQuantity,
+  onNote,
 }: {
   totalCount: number;
   totalAmount: number;
-  foodCart: { items: (MenuItem & { qty: number })[]; subtotal: number };
-  drinkCart: { items: (MenuItem & { qty: number })[]; subtotal: number };
+  foodCart: { items: (MenuItem & { qty: number; note: string })[]; subtotal: number };
+  drinkCart: { items: (MenuItem & { qty: number; note: string })[]; subtotal: number };
   food: KindData;
   drink: KindData;
   expanded: boolean;
@@ -374,6 +388,7 @@ function CartBar({
   onToggle: () => void;
   onSubmit: () => void;
   onQuantity: (itemId: string, delta: number) => void;
+  onNote: (itemId: string, note: string) => void;
 }) {
   const foodVendorName  = food.state  === 'open' ? food.vendor.name  : null;
   const drinkVendorName = drink.state === 'open' ? drink.vendor.name : null;
@@ -393,6 +408,7 @@ function CartBar({
                 items={foodCart.items}
                 subtotal={foodCart.subtotal}
                 onQuantity={onQuantity}
+                onNote={onNote}
               />
             )}
             {drinkCart.items.length > 0 && (
@@ -401,6 +417,7 @@ function CartBar({
                 items={drinkCart.items}
                 subtotal={drinkCart.subtotal}
                 onQuantity={onQuantity}
+                onNote={onNote}
               />
             )}
           </div>
@@ -440,25 +457,37 @@ function CartGroup({
   items,
   subtotal,
   onQuantity,
+  onNote,
 }: {
   title: string;
-  items: (MenuItem & { qty: number })[];
+  items: (MenuItem & { qty: number; note: string })[];
   subtotal: number;
   onQuantity: (itemId: string, delta: number) => void;
+  onNote: (itemId: string, note: string) => void;
 }) {
   return (
     <div className="border-b border-zinc-100 last:border-0">
       <div className="px-4 py-2 text-xs font-medium text-zinc-600 bg-zinc-50">{title}</div>
       <ul className="divide-y divide-zinc-100">
         {items.map((it) => (
-          <li key={it.id} className="px-4 py-3 flex items-center gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-zinc-900 truncate">{it.name}</p>
-              <p className="text-xs text-zinc-500 mt-0.5">
-                NT$ {it.price} × {it.qty} = NT$ {it.price * it.qty}
-              </p>
+          <li key={it.id} className="px-4 py-3 space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-zinc-900 truncate">{it.name}</p>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  NT$ {it.price} × {it.qty} = NT$ {it.price * it.qty}
+                </p>
+              </div>
+              <QtyControl qty={it.qty} onChange={(d) => onQuantity(it.id, d)} />
             </div>
-            <QtyControl qty={it.qty} onChange={(d) => onQuantity(it.id, d)} />
+            <input
+              type="text"
+              value={it.note}
+              onChange={(e) => onNote(it.id, e.target.value)}
+              placeholder="備註（少糖、加料、不要香菜...）"
+              maxLength={100}
+              className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 text-xs bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-100 outline-none"
+            />
           </li>
         ))}
       </ul>

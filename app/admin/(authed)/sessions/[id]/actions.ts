@@ -9,6 +9,7 @@ export interface AdminEditItem {
   item_name: string;
   item_price: number;
   quantity: number;
+  note?: string;
 }
 
 export interface AdminUpdateOrderResult {
@@ -70,16 +71,20 @@ export async function adminUpdateOrder(input: {
   // 插新明細，全部標 modified_*
   const { error: insertErr } = await supabase
     .from('order_items')
-    .insert(items.map((it) => ({
-      order_id:        orderId,
-      menu_item_id:    it.menu_item_id,
-      item_name:       it.item_name.trim(),
-      item_price:      it.item_price,
-      quantity:        it.quantity,
-      modified_at:     now,
-      modified_by:     admin.id,
-      modified_reason: reason.trim(),
-    })));
+    .insert(items.map((it) => {
+      const trimmedNote = it.note?.trim() ?? '';
+      return {
+        order_id:        orderId,
+        menu_item_id:    it.menu_item_id,
+        item_name:       it.item_name.trim(),
+        item_price:      it.item_price,
+        quantity:        it.quantity,
+        note:            trimmedNote || null,
+        modified_at:     now,
+        modified_by:     admin.id,
+        modified_reason: reason.trim(),
+      };
+    }));
   if (insertErr) return { ok: false, error: `修改失敗（新增）：${insertErr.message}` };
 
   // 更新總額

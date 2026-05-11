@@ -35,7 +35,7 @@ export default async function SessionDetailPage({ params }: Props) {
     .select(`
       id, employee_id, employee_name, total_amount, status, submitted_at, editable_until,
       items:order_items (
-        id, menu_item_id, item_name, item_price, quantity,
+        id, menu_item_id, item_name, item_price, quantity, note,
         modified_at, modified_reason,
         modified_by_admin:admin_users!order_items_modified_by_fkey ( name )
       )

@@ -6,7 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 export interface SubmitOrderInput {
   employeeId: string;
   sessionId: string;
-  items: { menuItemId: string; quantity: number }[];
+  items: { menuItemId: string; quantity: number; note?: string }[];
 }
 
 export interface SubmitOrderResult {
@@ -84,11 +84,13 @@ export async function submitOrder(input: SubmitOrderInput): Promise<SubmitOrderR
   const priceMap = new Map(menuItems.map((m) => [m.id, m]));
   const orderItems = items.map((it) => {
     const m = priceMap.get(it.menuItemId)!;
+    const trimmedNote = it.note?.trim() ?? '';
     return {
       menu_item_id: m.id,
       item_name:    m.name,
       item_price:   m.price,
       quantity:     it.quantity,
+      note:         trimmedNote || null,
     };
   });
   const totalAmount = orderItems.reduce((sum, oi) => sum + oi.item_price * oi.quantity, 0);

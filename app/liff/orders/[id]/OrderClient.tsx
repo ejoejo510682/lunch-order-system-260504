@@ -17,6 +17,7 @@ export interface OrderItem {
   item_name: string;
   item_price: number;
   quantity: number;
+  note: string | null;
   modified_at: string | null;
   modified_reason: string | null;
   modified_by_admin: { name: string } | null;
@@ -98,16 +99,23 @@ export function OrderClient({
 
           <ul className="divide-y divide-zinc-100">
             {order.items.map((it) => (
-              <li key={it.id} className="px-4 py-3 flex items-center">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-zinc-900 truncate">{it.item_name}</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">
-                    NT$ {it.item_price} × {it.quantity}
+              <li key={it.id} className="px-4 py-3">
+                <div className="flex items-center">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-zinc-900 truncate">{it.item_name}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      NT$ {it.item_price} × {it.quantity}
+                    </p>
+                  </div>
+                  <p className="text-sm font-semibold text-zinc-900">
+                    NT$ {it.item_price * it.quantity}
                   </p>
                 </div>
-                <p className="text-sm font-semibold text-zinc-900">
-                  NT$ {it.item_price * it.quantity}
-                </p>
+                {it.note && (
+                  <p className="mt-1 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">
+                    📝 {it.note}
+                  </p>
+                )}
               </li>
             ))}
           </ul>
@@ -294,26 +302,37 @@ function EditModal({
   onError: (e: string | null) => void;
 }) {
   const router = useRouter();
-  const [cart, setCart] = useState<Record<string, number>>(() => {
-    const map: Record<string, number> = {};
+  const [cart, setCart] = useState<Record<string, { qty: number; note: string }>>(() => {
+    const map: Record<string, { qty: number; note: string }> = {};
     for (const it of order.items) {
-      if (it.menu_item_id) map[it.menu_item_id] = it.quantity;
+      if (it.menu_item_id) {
+        map[it.menu_item_id] = { qty: it.quantity, note: it.note ?? '' };
+      }
     }
     return map;
   });
   const [pending, startTransition] = useTransition();
 
-  const total = menuItems.reduce((s, m) => s + m.price * (cart[m.id] ?? 0), 0);
-  const count = Object.values(cart).reduce((s, q) => s + q, 0);
+  const total = menuItems.reduce((s, m) => s + m.price * (cart[m.id]?.qty ?? 0), 0);
+  const count = Object.values(cart).reduce((s, c) => s + c.qty, 0);
 
   const setQty = (id: string, delta: number) => {
     setCart((prev) => {
       const next = { ...prev };
-      const cur = next[id] ?? 0;
-      const nv = Math.max(0, cur + delta);
+      const cur = next[id];
+      const curQty = cur?.qty ?? 0;
+      const nv = Math.max(0, curQty + delta);
       if (nv === 0) delete next[id];
-      else next[id] = nv;
+      else next[id] = { qty: nv, note: cur?.note ?? '' };
       return next;
+    });
+  };
+
+  const setNote = (id: string, note: string) => {
+    setCart((prev) => {
+      const cur = prev[id];
+      if (!cur) return prev;
+      return { ...prev, [id]: { qty: cur.qty, note } };
     });
   };
 
@@ -323,7 +342,11 @@ function EditModal({
       return;
     }
     onError(null);
-    const items = Object.entries(cart).map(([menuItemId, quantity]) => ({ menuItemId, quantity }));
+    const items = Object.entries(cart).map(([menuItemId, c]) => ({
+      menuItemId,
+      quantity: c.qty,
+      note: c.note,
+    }));
     startTransition(async () => {
       const r = await updateOrderItems({ orderId: order.id, employeeId: order.employee_id, items });
       if (!r.ok) onError(r.error ?? '修改失敗');
@@ -351,32 +374,45 @@ function EditModal({
 
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
           {menuItems.map((m) => {
-            const qty = cart[m.id] ?? 0;
+            const entry = cart[m.id];
+            const qty = entry?.qty ?? 0;
             return (
-              <div key={m.id} className="bg-white border border-zinc-200 rounded-xl px-4 py-3 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-zinc-900 truncate">{m.name}</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">NT$ {m.price}</p>
+              <div key={m.id} className="bg-white border border-zinc-200 rounded-xl px-4 py-3 space-y-2">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-zinc-900 truncate">{m.name}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">NT$ {m.price}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setQty(m.id, -1)}
+                      disabled={qty === 0 || pending}
+                      className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-lg flex items-center justify-center disabled:opacity-30"
+                    >
+                      −
+                    </button>
+                    <span className="min-w-[1.5rem] text-center text-sm font-semibold text-zinc-900">{qty}</span>
+                    <button
+                      type="button"
+                      onClick={() => setQty(m.id, 1)}
+                      disabled={pending}
+                      className="w-8 h-8 rounded-full bg-zinc-900 hover:bg-zinc-800 text-white text-lg flex items-center justify-center"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setQty(m.id, -1)}
-                    disabled={qty === 0 || pending}
-                    className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-lg flex items-center justify-center disabled:opacity-30"
-                  >
-                    −
-                  </button>
-                  <span className="min-w-[1.5rem] text-center text-sm font-semibold text-zinc-900">{qty}</span>
-                  <button
-                    type="button"
-                    onClick={() => setQty(m.id, 1)}
-                    disabled={pending}
-                    className="w-8 h-8 rounded-full bg-zinc-900 hover:bg-zinc-800 text-white text-lg flex items-center justify-center"
-                  >
-                    +
-                  </button>
-                </div>
+                {qty > 0 && (
+                  <input
+                    type="text"
+                    value={entry?.note ?? ''}
+                    onChange={(e) => setNote(m.id, e.target.value)}
+                    placeholder="備註（少糖、加料、不要香菜...）"
+                    maxLength={100}
+                    className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-100 outline-none"
+                  />
+                )}
               </div>
             );
           })}
