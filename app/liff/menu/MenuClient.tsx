@@ -71,7 +71,7 @@ export function MenuClient({
     visibleKinds[0] ?? 'food',
   );
 
-  const [cartExpanded, setCartExpanded] = useState(false);
+  const [cartExpanded, setCartExpanded] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, startSubmit] = useTransition();
 
