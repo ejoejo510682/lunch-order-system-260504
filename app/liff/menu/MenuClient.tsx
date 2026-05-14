@@ -472,6 +472,8 @@ function CartGroup({
   onNoteChange: (note: string) => void;
   onQuantity: (itemId: string, delta: number) => void;
 }) {
+  const [noteOpen, setNoteOpen] = useState(note.length > 0);
+
   return (
     <div className="border-b border-zinc-100 last:border-0">
       <div className="px-4 py-2 text-xs font-medium text-zinc-600 bg-zinc-50">{title}</div>
@@ -488,18 +490,40 @@ function CartGroup({
           </li>
         ))}
       </ul>
-      <div className="px-4 py-2 space-y-1 bg-zinc-50">
-        <label className="block text-xs text-zinc-600">
-          📝 備註（這份訂單的注意事項，例：少糖、不要香菜）
-        </label>
-        <input
-          type="text"
-          value={note}
-          onChange={(e) => onNoteChange(e.target.value)}
-          placeholder="不需要可留空"
-          maxLength={200}
-          className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-100 outline-none"
-        />
+      <div className="px-4 py-2 bg-zinc-50">
+        {!noteOpen ? (
+          <button
+            type="button"
+            onClick={() => setNoteOpen(true)}
+            className="text-xs text-zinc-600 hover:text-zinc-900 underline"
+          >
+            📝 加備註（少糖、不要香菜...）
+          </button>
+        ) : (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-zinc-600">📝 備註</label>
+              {note.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => setNoteOpen(false)}
+                  className="text-xs text-zinc-400 hover:text-zinc-600"
+                >
+                  收合
+                </button>
+              )}
+            </div>
+            <input
+              type="text"
+              value={note}
+              onChange={(e) => onNoteChange(e.target.value)}
+              placeholder="例：少糖、不要香菜"
+              maxLength={200}
+              autoFocus
+              className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-100 outline-none"
+            />
+          </div>
+        )}
       </div>
       <div className="px-4 py-2 text-xs text-zinc-600 text-right bg-zinc-50 border-t border-zinc-100">
         小計：NT$ {subtotal}

@@ -44,10 +44,10 @@ export function EmployeesClient({ employees }: { employees: Employee[] }) {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">員工管理</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">員工管理</h1>
           <p className="text-sm text-zinc-500 mt-1">
             管理員工名單。員工被刪除後，歷史訂單仍會保留姓名紀錄。
           </p>
@@ -55,7 +55,7 @@ export function EmployeesClient({ employees }: { employees: Employee[] }) {
         <button
           type="button"
           onClick={() => setModal({ mode: 'create' })}
-          className="px-4 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium transition"
+          className="self-start sm:self-auto px-4 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium transition"
         >
           + 新增員工
         </button>
@@ -67,40 +67,26 @@ export function EmployeesClient({ employees }: { employees: Employee[] }) {
             <p className="text-sm">還沒有員工，點右上「新增員工」開始</p>
           </div>
         ) : (
-          <table className="w-full table-fixed">
-            <colgroup>
-              <col className="w-[35%]" />
-              <col className="w-[40%]" />
-              <col className="w-[25%]" />
-            </colgroup>
-            <thead className="bg-zinc-50 border-b border-zinc-200">
-              <tr>
-                <th className="text-left text-xs font-semibold text-zinc-600 uppercase tracking-wider px-6 py-3">姓名</th>
-                <th className="text-left text-xs font-semibold text-zinc-600 uppercase tracking-wider px-6 py-3">LINE 綁定</th>
-                <th className="text-right text-xs font-semibold text-zinc-600 uppercase tracking-wider px-6 py-3">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
+          <>
+            <ul className="sm:hidden divide-y divide-zinc-100">
               {employees.map((e) => (
-                <tr key={e.id} className="hover:bg-zinc-50">
-                  <td className="px-6 py-4 text-sm font-medium text-zinc-900 truncate">
-                    {e.name}
-                  </td>
-                  <td className="px-6 py-4 text-sm">
-                    {e.line_user_id ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
-                        已綁定
-                      </span>
-                    ) : (
-                      <span className="text-zinc-400">尚未綁定</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right space-x-3 whitespace-nowrap">
+                <li key={e.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-zinc-900 truncate">{e.name}</p>
+                    <p className="text-xs mt-0.5">
+                      {e.line_user_id ? (
+                        <span className="text-green-700">✓ 已綁定 LINE</span>
+                      ) : (
+                        <span className="text-zinc-400">尚未綁定 LINE</span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
                       type="button"
                       onClick={() => setModal({ mode: 'edit', employee: e })}
                       disabled={busyId === e.id}
-                      className="text-sm text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50"
+                      className="px-3 py-1.5 rounded-lg text-sm text-blue-600 hover:bg-blue-50 font-medium disabled:opacity-50"
                     >
                       編輯
                     </button>
@@ -108,15 +94,66 @@ export function EmployeesClient({ employees }: { employees: Employee[] }) {
                       type="button"
                       onClick={() => handleDelete(e)}
                       disabled={busyId === e.id}
-                      className="text-sm text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+                      className="px-3 py-1.5 rounded-lg text-sm text-red-600 hover:bg-red-50 font-medium disabled:opacity-50"
                     >
-                      {busyId === e.id ? '刪除中...' : '刪除'}
+                      {busyId === e.id ? '刪除中…' : '刪除'}
                     </button>
-                  </td>
-                </tr>
+                  </div>
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+
+            <table className="hidden sm:table w-full table-fixed">
+              <colgroup>
+                <col className="w-[35%]" />
+                <col className="w-[40%]" />
+                <col className="w-[25%]" />
+              </colgroup>
+              <thead className="bg-zinc-50 border-b border-zinc-200">
+                <tr>
+                  <th className="text-left text-xs font-semibold text-zinc-600 uppercase tracking-wider px-6 py-3">姓名</th>
+                  <th className="text-left text-xs font-semibold text-zinc-600 uppercase tracking-wider px-6 py-3">LINE 綁定</th>
+                  <th className="text-right text-xs font-semibold text-zinc-600 uppercase tracking-wider px-6 py-3">操作</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {employees.map((e) => (
+                  <tr key={e.id} className="hover:bg-zinc-50">
+                    <td className="px-6 py-4 text-sm font-medium text-zinc-900 truncate">
+                      {e.name}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      {e.line_user_id ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+                          已綁定
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400">尚未綁定</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right space-x-3 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => setModal({ mode: 'edit', employee: e })}
+                        disabled={busyId === e.id}
+                        className="text-sm text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50"
+                      >
+                        編輯
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(e)}
+                        disabled={busyId === e.id}
+                        className="text-sm text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+                      >
+                        {busyId === e.id ? '刪除中...' : '刪除'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </div>
 

@@ -128,6 +128,15 @@ export function TodayClient({ warning }: { warning: string | null }) {
           </p>
         </div>
 
+        {orders.some((o) => o.status === 'submitted' && o.session_status === 'open' && new Date(o.editable_until).getTime() > Date.now()) && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
+            <p className="font-medium">💡 想改剛才送出的訂單？</p>
+            <p className="text-xs mt-1 text-blue-700">
+              點下面任一張訂單卡（5 分鐘內）即可單獨修改吃的或喝的，不用全部取消重點。
+            </p>
+          </div>
+        )}
+
         {orders.length === 0 && !loading ? (
           <div className="text-center py-12">
             <div className="text-4xl mb-2">📭</div>
@@ -200,8 +209,21 @@ function OrderCard({ order }: { order: TodayOrder }) {
     .sort((a, b) => (b.modified_at ?? '').localeCompare(a.modified_at ?? ''))[0];
   const isModified = !!modifiedItem;
 
+  const cardClickable = isEditable;
+
+  const handleCardClick = () => {
+    if (cardClickable) router.push(`/liff/orders/${order.id}`);
+  };
+
   return (
-    <li className="bg-white border border-zinc-200 rounded-xl overflow-hidden">
+    <li
+      className={`bg-white border rounded-xl overflow-hidden ${
+        cardClickable
+          ? 'border-blue-300 hover:border-blue-500 cursor-pointer transition shadow-sm'
+          : 'border-zinc-200'
+      }`}
+      onClick={handleCardClick}
+    >
       <div className="px-4 py-3 border-b border-zinc-100 flex items-center justify-between">
         <span className="text-sm font-medium text-zinc-900">
           {kindEmoji} {order.vendor_name ?? '—'}
@@ -256,18 +278,14 @@ function OrderCard({ order }: { order: TodayOrder }) {
       {isEditable && (
         <div className="px-4 py-3 bg-blue-50 border-t border-blue-100 flex items-center gap-3">
           <div className="flex-1">
-            <p className="text-xs text-blue-700">剩餘可修改</p>
+            <p className="text-xs text-blue-700">剩餘可修改時間</p>
             <p className="text-base font-bold text-blue-900 tabular-nums">
               {String(min).padStart(2, '0')}:{String(sec).padStart(2, '0')}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => router.push(`/liff/orders/${order.id}`)}
-            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition"
-          >
-            修改 / 取消
-          </button>
+          <span className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium">
+            點此修改 / 取消 →
+          </span>
         </div>
       )}
     </li>

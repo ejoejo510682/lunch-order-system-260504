@@ -20,7 +20,7 @@ export default async function SessionDetailPage({ params }: Props) {
       id, kind, status, order_date,
       auto_close_at, closed_at,
       cancelled_at, cancellation_reason,
-      vendor:vendors ( id, name, phone )
+      vendor:vendors ( id, name, phone, note )
     `)
     .eq('id', id)
     .maybeSingle();

@@ -77,9 +77,9 @@ export function TodayOverview({ today, sessions, vendors, stats, canEdit }: Prop
   }, [router]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900">今日總覽</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">今日總覽</h1>
         <p className="text-sm text-zinc-500 mt-1">{formattedDate}</p>
       </div>
 
@@ -142,7 +142,7 @@ function SessionCard({
 
   return (
     <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
-      <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between">
+      <div className="px-4 sm:px-6 py-4 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="text-xl">{emoji}</span>
           <h2 className="text-lg font-semibold text-zinc-900">{label}</h2>
@@ -154,14 +154,14 @@ function SessionCard({
               type="button"
               onClick={handleClose}
               disabled={closing}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-zinc-900 hover:bg-zinc-800 text-white transition disabled:opacity-50"
+              className="flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-lg text-sm font-medium bg-zinc-900 hover:bg-zinc-800 text-white transition disabled:opacity-50"
             >
               {closing ? '結單中...' : '結單'}
             </button>
             <button
               type="button"
               onClick={() => setDialog({ mode: 'cancel' })}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium border border-red-200 text-red-700 hover:bg-red-50 transition"
+              className="flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-lg text-sm font-medium border border-red-200 text-red-700 hover:bg-red-50 transition"
             >
               取消整場
             </button>
@@ -171,14 +171,14 @@ function SessionCard({
           <button
             type="button"
             onClick={() => setDialog({ mode: 'cancel' })}
-            className="px-3 py-1.5 rounded-lg text-sm font-medium border border-red-200 text-red-700 hover:bg-red-50 transition"
+            className="px-3 py-2 sm:py-1.5 rounded-lg text-sm font-medium border border-red-200 text-red-700 hover:bg-red-50 transition"
           >
             取消整場
           </button>
         )}
       </div>
 
-      <div className="px-6 py-5">
+      <div className="px-4 sm:px-6 py-5">
         {!session ? (
           <NoSessionView kind={kind} canEdit={canEdit} hasVendors={vendors.length > 0} onOpen={() => setDialog({ mode: 'open' })} />
         ) : (
@@ -187,7 +187,7 @@ function SessionCard({
       </div>
 
       {session && (
-        <div className="px-6 py-3 bg-zinc-50 border-t border-zinc-100">
+        <div className="px-4 sm:px-6 py-3 bg-zinc-50 border-t border-zinc-100">
           <Link
             href={`/admin/sessions/${session.id}`}
             className="text-sm text-blue-600 hover:text-blue-800 font-medium"
