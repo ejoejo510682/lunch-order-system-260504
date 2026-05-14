@@ -120,32 +120,32 @@ export default async function SettlementsPage({ searchParams }: Props) {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900">週結勾選</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">週結勾選</h1>
         <p className="text-sm text-zinc-500 mt-1">
           標記員工是否已付清當週餐費（員工會在 LIFF 看到狀態）
         </p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-zinc-200 p-4 flex items-center justify-between">
+      <div className="bg-white rounded-2xl border border-zinc-200 p-3 sm:p-4 flex items-center justify-between gap-2">
         <Link
           href={`/admin/settlements?week=${prev}`}
-          className="px-3 py-1.5 rounded-lg text-sm text-zinc-700 hover:bg-zinc-100"
+          className="px-3 py-2 rounded-lg text-sm text-zinc-700 hover:bg-zinc-100 shrink-0"
         >
           ← 上週
         </Link>
-        <div className="text-center">
+        <div className="text-center min-w-0">
           <p className="text-xs text-zinc-500">
             {isThisWeek ? '本週' : range.start === shiftWeek(thisWeek, -1) ? '上週' : ''}
           </p>
-          <p className="text-base font-semibold text-zinc-900">
+          <p className="text-sm sm:text-base font-semibold text-zinc-900">
             {fmt(range.start)} – {fmt(range.end)}
           </p>
         </div>
         <Link
           href={`/admin/settlements?week=${next}`}
-          className="px-3 py-1.5 rounded-lg text-sm text-zinc-700 hover:bg-zinc-100"
+          className="px-3 py-2 rounded-lg text-sm text-zinc-700 hover:bg-zinc-100 shrink-0"
         >
           下週 →
         </Link>
@@ -162,7 +162,7 @@ export default async function SettlementsPage({ searchParams }: Props) {
         </div>
       )}
 
-      <SettlementsClient settlements={settlements} weekStart={range.start} />
+      <SettlementsClient settlements={settlements} weekStart={range.start} weekRange={range} />
     </div>
   );
 }
