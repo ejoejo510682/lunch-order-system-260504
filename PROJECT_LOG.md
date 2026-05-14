@@ -4,6 +4,50 @@
 
 ---
 
+## 2026-05-14
+
+### 後台手機 RWD 全面改造 + 廠商備註顯示 + LIFF UX 改進
+
+**情境**：使用者實際開始用系統後反饋幾個痛點：
+1. 點餐修正機制：不知道 /liff/today 訂單可以個別編輯，以為要全部取消重點
+2. 後台介面在手機上完全不能用（左側 sidebar 把內容擠成豎排）
+3. 備註欄會擋住背後的菜單清單
+4. 訂餐員需要在叫貨單頁面看到廠商備註（滿X送、用 LINE 訂...）
+
+**改動**（一次 commit `95ffcf3`）：
+
+**後台 RWD**：
+- 新建 `app/admin/(authed)/AdminShell.tsx`（client component）：手機 hamburger drawer + 桌機固定 sidebar
+- `layout.tsx` 從 server 元件渲染變成傳遞 navItems 給 AdminShell
+- 手機頂部 sticky bar 顯示當前頁名 + 漢堡按鈕；點選單項自動關閉 drawer
+- TodayOverview / SessionDetailClient / EmployeesClient 三頁手機友善（按鈕全寬、padding 縮小）
+- EmployeesClient 手機顯示卡片版（hidden table、show ul）；桌機維持原表格
+- SessionDetailClient 編輯訂單 modal 在手機改全螢幕（h-full、菜單按鈕單欄）
+
+**廠商備註**：
+- `/admin/sessions/[id]` page.tsx 多撈 `vendor.note`
+- 兩處顯示：白色 header 卡片下方黃色橫幅 + 叫貨單區塊內橘色左邊框框
+- 「複製為純文字」叫貨單也包含廠商備註（複製貼到 LINE 給廠商用）
+- 廠商電話加 `tel:` 連結，手機可一鍵撥號
+
+**LIFF UX**：
+- MenuClient 備註欄：吃／喝兩格保留，預設只顯示「📝 加備註」小連結，點了才展開（已有內容自動展開）→ 不再擋背後品項
+- TodayClient：可編輯訂單上方藍色橫幅「💡 想改剛才送出的訂單？」
+- TodayClient：訂單卡邊框變藍色、整張可點，目標更大（不只右下按鈕）
+
+**修補**：
+- root `app/layout.tsx` 加 `viewport: { width: 'device-width' }`，手機才會用 device-width 渲染（之前沒設，手機把網頁當 980px 桌機渲染後縮放）
+- `next.config.ts` 加 `allowedDevOrigins: ['192.168.68.59']`，Next.js 16 預設擋 LAN 訪問 dev resource → 手機從區網 IP 訪問 dev server 時 JS bundle 收不齊
+- SessionDetailClient PurchaseList 底部「廠商：xxx（電話）」字串改為單一 template literal，避免 JSX conditional 渲染在 dev mode 偶發 hydration warning
+
+**踩雷紀錄（給未來的 Claude）**：
+- Tailwind 4 對 `(authed)` Route Group 路徑有過濾，但實測下來沒有真的跳過 — 之前以為的「Tailwind 跳過括號」是診斷誤判
+- 真正卡住的原因：**Claude 工作目錄是 git worktree，但 Edit 用了主目錄絕對路徑**，所有改動進主目錄、worktree 沒同步、dev server 跑在 worktree → 看到的是「沒改動的版本」
+- 之後 Edit 應該優先用相對路徑，由 cwd 決定，避免再犯
+- 在 worktree 開 dev server，要記得把 `.env.local` 從主目錄複製過來（`.gitignore` 排除不會自動帶）
+
+---
+
 ## 2026-05-11
 
 ### 新增功能：員工點餐備註欄

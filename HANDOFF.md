@@ -3,7 +3,7 @@
 > 這份文件是給 Claude Code 在新對話開始時讀的快速狀態快照。  
 > 同時請讀 `CLAUDE.md`、`SKILL.md`、`PROJECT_LOG.md` 補完整脈絡。
 
-## 一、目前狀態（2026-05-13）
+## 一、目前狀態（2026-05-14）
 
 ### 已部署上線
 - 正式網址：https://lunch-order-system-260504.vercel.app
@@ -46,6 +46,10 @@
 5. **週結付款勾選**（weekly_payments 表）+ LIFF 顯示「✓ 已付清」
 6. **廠商菜單圖片**上傳 + LIFF 雙指縮放（react-zoom-pan-pinch）
 7. **員工點餐備註欄**（order_items.note，每分類一個共用備註）
+8. **後台手機 RWD**（hamburger drawer + 各頁手機友善）
+9. **場次詳細頁顯示廠商備註**（黃色 header 橫幅 + 叫貨單區塊內橘色框 + 純文字輸出包含）
+10. **LIFF 備註欄改可收合**（吃／喝兩格保留，預設不擋背景）
+11. **LIFF「我的訂單」訂單卡整張可點 + 修改提示橫幅**
 
 ### 未做（規格 Phase 5-6）⏳
 - **Phase 5**：結算報表頁 + Excel 匯出 + 一鍵複製 LINE 訊息（週/月/自訂區間）
@@ -142,6 +146,16 @@
 - 校正：飲品加珍珠是 **+10**（不是 +5，+5 是雞蛋糕加料）
 - 寫了給員工看的點餐簡易說明（未存成檔，僅對話內）
 
+### 今天（2026-05-14）做的事
+- 後台手機 RWD 全面改造（hamburger + 各頁手機友善）
+- 場次詳細頁顯示廠商備註（黃 header + 橘叫貨單框 + 純文字輸出）
+- LIFF 備註欄可收合、訂單卡整張可點、加修改提示
+- root layout 加 viewport meta + next.config 加 allowedDevOrigins（手機 LAN 訪問 dev 用）
+- 踩雷：Claude 把所有改動寫到主目錄但 dev server 跑在 worktree → 卡了一個多小時才發現
+  - 教訓：在 worktree 環境工作要用相對路徑
+  - 在 worktree 開 dev server 要把 .env.local 從主目錄複製過來（git 不會帶）
+- **明天（5/15 週五）使用者要結算大家的一週餐費** → 結算報表是下個對話的最高優先
+
 ---
 
 ## 六、新對話接手時建議
@@ -198,4 +212,4 @@ git log --oneline -10
 
 ---
 
-最後更新：2026-05-13
+最後更新：2026-05-14
