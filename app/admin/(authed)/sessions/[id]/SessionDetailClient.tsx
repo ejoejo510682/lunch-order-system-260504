@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { adminUpdateOrder, adminCancelOrder, type AdminEditItem } from './actions';
+import { adminUpdateOrder, adminCancelOrder, bulkUpdateItemPrice, type AdminEditItem } from './actions';
 
 // ---------- types ----------
 
@@ -198,6 +198,7 @@ function PurchaseList({
   orders: OrderForAdmin[];
 }) {
   const [copied, setCopied] = useState(false);
+  const [editingPrice, setEditingPrice] = useState<{ name: string; price: number; count: number } | null>(null);
 
   // 聚合品項 (item_name + item_price 為一組，因為改價後同名不同價)
   // 每個買家獨立列一筆（同人不同備註要分開顯示）
@@ -306,9 +307,19 @@ function PurchaseList({
         <ul className="space-y-2">
           {aggregated.map((a, i) => (
             <li key={i}>
-              <div className="font-bold text-zinc-900">
-                {a.name} <span className="text-zinc-600">×{a.count}</span>
-                <span className="text-xs text-zinc-400 ml-2 font-normal">NT$ {a.price}/份</span>
+              <div className="font-bold text-zinc-900 flex items-baseline flex-wrap gap-x-2">
+                <span>{a.name}</span>
+                <span className="text-zinc-600">×{a.count}</span>
+                <span className="text-xs text-zinc-400 font-normal">NT$ {a.price}/份</span>
+                {session.status !== 'cancelled' && (
+                  <button
+                    type="button"
+                    onClick={() => setEditingPrice({ name: a.name, price: a.price, count: a.count })}
+                    className="print:hidden text-xs text-blue-600 hover:text-blue-800 underline font-normal"
+                  >
+                    改價
+                  </button>
+                )}
               </div>
               <div className="text-zinc-600 ml-3 mt-0.5">
                 - {a.buyers.map(formatBuyer).join('、')}
@@ -328,7 +339,198 @@ function PurchaseList({
           )}
         </div>
       </div>
+
+      {editingPrice && (
+        <BulkPriceModal
+          sessionId={session.id}
+          itemName={editingPrice.name}
+          oldPrice={editingPrice.price}
+          totalCount={editingPrice.count}
+          onClose={() => setEditingPrice(null)}
+        />
+      )}
     </section>
+  );
+}
+
+function BulkPriceModal({
+  sessionId,
+  itemName,
+  oldPrice,
+  totalCount,
+  onClose,
+}: {
+  sessionId: string;
+  itemName: string;
+  oldPrice: number;
+  totalCount: number;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [newPrice, setNewPrice] = useState<string>(String(oldPrice));
+  const [reason, setReason] = useState<string>('餐廳實際價格調整');
+  const [syncMenu, setSyncMenu] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const newPriceNum = parseInt(newPrice, 10);
+  const validPrice = Number.isInteger(newPriceNum) && newPriceNum >= 0 && newPriceNum !== oldPrice;
+  const diff = validPrice ? newPriceNum - oldPrice : 0;
+  const totalDiff = diff * totalCount;
+
+  const handleSubmit = () => {
+    if (!validPrice) {
+      setError('請輸入與原價不同的非負整數');
+      return;
+    }
+    if (!reason.trim()) {
+      setError('修改原因為必填');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const r = await bulkUpdateItemPrice({
+        sessionId,
+        itemName,
+        oldPrice,
+        newPrice: newPriceNum,
+        reason: reason.trim(),
+        syncMenu,
+      });
+      if (!r.ok) {
+        setError(r.error ?? '更新失敗');
+        return;
+      }
+      const msgs: string[] = [];
+      msgs.push(`已更新 ${r.affectedItems} 個品項（${r.affectedOrders} 筆訂單）`);
+      if (r.unmarkedPayments && r.unmarkedPayments > 0) {
+        msgs.push(`${r.unmarkedPayments} 位員工的「已付清」標記已自動取消`);
+      }
+      if (r.menuSynced) msgs.push('菜單價格已同步更新');
+      alert('✓ 完成\n\n' + msgs.join('\n'));
+      onClose();
+      router.refresh();
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-stretch sm:items-center justify-center sm:p-4">
+      <div className="bg-white sm:rounded-2xl shadow-xl w-full sm:max-w-md h-full sm:h-auto sm:max-h-[90vh] flex flex-col">
+        <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-zinc-200 flex items-center justify-between">
+          <div className="min-w-0">
+            <h2 className="text-base font-bold text-zinc-900">批次調整價格</h2>
+            <p className="text-xs text-zinc-500 mt-0.5 truncate">{itemName}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={pending}
+            className="text-zinc-500 text-sm px-2 py-1 rounded hover:bg-zinc-100"
+          >
+            關閉
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-4">
+          <div className="bg-zinc-50 rounded-xl p-3 space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-zinc-600">本場次共點</span>
+              <span className="font-semibold text-zinc-900">{totalCount} 份</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-zinc-600">原價</span>
+              <span className="font-semibold text-zinc-900">NT$ {oldPrice} / 份</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-1">
+              新價格 <span className="text-red-500">*</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-zinc-500">NT$</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min="0"
+                step="1"
+                value={newPrice}
+                onChange={(e) => setNewPrice(e.target.value)}
+                disabled={pending}
+                autoFocus
+                className="flex-1 px-3 py-2 rounded-lg border border-zinc-300 text-base focus:border-blue-500 focus:ring-1 focus:ring-blue-200 outline-none"
+              />
+              <span className="text-sm text-zinc-500">/ 份</span>
+            </div>
+            {validPrice && (
+              <p className={`text-xs mt-2 ${diff > 0 ? 'text-amber-700' : 'text-green-700'}`}>
+                差額：{diff > 0 ? '+' : ''}NT$ {diff} / 份
+                總影響：{totalDiff > 0 ? '+' : ''}NT$ {totalDiff}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-1">
+              修改原因 <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={2}
+              disabled={pending}
+              className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200 outline-none resize-none"
+            />
+            <p className="text-xs text-zinc-500 mt-1">
+              員工會在 LIFF 訂單中看到這個原因
+            </p>
+          </div>
+
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={syncMenu}
+              onChange={(e) => setSyncMenu(e.target.checked)}
+              disabled={pending}
+              className="mt-0.5 w-4 h-4"
+            />
+            <div>
+              <p className="text-sm text-zinc-800">同時更新菜單，未來下單用新價格</p>
+              <p className="text-xs text-zinc-500">不勾選的話只改本場次訂單，菜單仍是 NT$ {oldPrice}</p>
+            </div>
+          </label>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+            ⚠️ 受影響員工的「已付清」標記會被自動取消，需要重新確認付款
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="px-4 sm:px-5 py-3 sm:py-4 border-t border-zinc-200 bg-zinc-50 flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={pending}
+            className="px-4 py-2 rounded-lg text-sm text-zinc-700 hover:bg-zinc-100 transition disabled:opacity-50"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={pending || !validPrice || !reason.trim()}
+            className="flex-1 px-5 py-2.5 rounded-lg text-sm bg-zinc-900 hover:bg-zinc-800 text-white font-bold transition disabled:opacity-40"
+          >
+            {pending ? '更新中…' : '確認調整'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
