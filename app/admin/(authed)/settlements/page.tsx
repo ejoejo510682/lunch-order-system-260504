@@ -34,7 +34,8 @@ export default async function SettlementsPage({ searchParams }: Props) {
     .from('orders')
     .select(`
       id, employee_id, employee_name, total_amount, status, submitted_at,
-      session:daily_sessions ( status, order_date )
+      session:daily_sessions ( status, order_date, kind, vendor:vendors ( name ) ),
+      items:order_items ( item_name, item_price, quantity, note )
     `)
     .gte('submitted_at', `${range.start}T00:00:00+08:00`)
     .lt('submitted_at', `${nextWeekMonday}T00:00:00+08:00`)
@@ -45,10 +46,18 @@ export default async function SettlementsPage({ searchParams }: Props) {
   }
 
   type RawOrder = {
+    id: string;
     employee_id: string | null;
     employee_name: string;
     total_amount: number;
-    session: { status: 'open' | 'closed' | 'cancelled' } | null;
+    submitted_at: string;
+    session: {
+      status: 'open' | 'closed' | 'cancelled';
+      order_date: string;
+      kind: 'food' | 'drink';
+      vendor: { name: string } | null;
+    } | null;
+    items: { item_name: string; item_price: number; quantity: number; note: string | null }[];
   };
 
   // 依員工聚合，排除取消場次的訂單
@@ -56,10 +65,19 @@ export default async function SettlementsPage({ searchParams }: Props) {
   for (const o of (orders as unknown as RawOrder[]) ?? []) {
     if (o.session?.status === 'cancelled') continue;
     const key = o.employee_id ?? `__deleted__${o.employee_name}`;
+    const orderDetail = {
+      id:           o.id,
+      orderDate:    o.session?.order_date ?? '',
+      kind:         o.session?.kind ?? 'food',
+      vendorName:   o.session?.vendor?.name ?? '（廠商已刪除）',
+      totalAmount:  o.total_amount,
+      items:        o.items ?? [],
+    };
     const existing = aggMap.get(key);
     if (existing) {
       existing.orderCount += 1;
       existing.totalAmount += o.total_amount;
+      existing.orders.push(orderDetail);
     } else {
       aggMap.set(key, {
         employeeId:    o.employee_id,
@@ -67,8 +85,14 @@ export default async function SettlementsPage({ searchParams }: Props) {
         orderCount:    1,
         totalAmount:   o.total_amount,
         payment:       null,
+        orders:        [orderDetail],
       });
     }
+  }
+
+  // 每位員工的訂單依日期排序
+  for (const s of aggMap.values()) {
+    s.orders.sort((a, b) => a.orderDate.localeCompare(b.orderDate));
   }
 
   // 撈本週的付款紀錄
@@ -111,6 +135,7 @@ export default async function SettlementsPage({ searchParams }: Props) {
         orderCount:    0,
         totalAmount:   0,
         payment:       paymentInfo,
+        orders:        [],
       });
     }
   }

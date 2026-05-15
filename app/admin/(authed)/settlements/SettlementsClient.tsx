@@ -11,12 +11,22 @@ export interface PaymentInfo {
   paidByName: string | null;
 }
 
+export interface OrderDetail {
+  id: string;
+  orderDate: string;
+  kind: 'food' | 'drink';
+  vendorName: string;
+  totalAmount: number;
+  items: { item_name: string; item_price: number; quantity: number; note: string | null }[];
+}
+
 export interface EmployeeSettlement {
   employeeId: string | null;
   employeeName: string;
   orderCount: number;
   totalAmount: number;
   payment: PaymentInfo | null;
+  orders: OrderDetail[];
 }
 
 export interface WeekRange {
@@ -214,9 +224,11 @@ function SettlementCard({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [expanded, setExpanded] = useState(false);
 
   const isPaid = settlement.payment !== null;
   const amountMismatch = isPaid && settlement.payment!.amount !== settlement.totalAmount;
+  const hasOrders = settlement.orders.length > 0;
 
   const handleMarkPaid = () => {
     if (!settlement.employeeId) {
@@ -277,7 +289,16 @@ function SettlementCard({
           </p>
         )}
       </div>
-      <div className="px-4 py-2 border-t border-zinc-100 flex items-center justify-end gap-2 bg-zinc-50">
+      <div className="px-4 py-2 border-t border-zinc-100 flex items-center justify-between gap-2 bg-zinc-50">
+        {hasOrders ? (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="px-3 py-1.5 rounded-lg text-sm text-blue-600 hover:bg-blue-50 font-medium"
+          >
+            📋 {expanded ? '收起明細' : '看明細'}
+          </button>
+        ) : <span />}
         {isPaid ? (
           <button
             type="button"
@@ -298,6 +319,9 @@ function SettlementCard({
           </button>
         )}
       </div>
+      {expanded && hasOrders && (
+        <OrderDetailsList orders={settlement.orders} />
+      )}
       {error && (
         <div className="px-4 py-2 bg-red-50 text-sm text-red-700 border-t border-red-100">
           {error}
@@ -305,6 +329,44 @@ function SettlementCard({
       )}
     </li>
   );
+}
+
+function OrderDetailsList({ orders }: { orders: OrderDetail[] }) {
+  return (
+    <div className="border-t border-zinc-100 bg-zinc-50/50 divide-y divide-zinc-100">
+      {orders.map((o) => (
+        <div key={o.id} className="px-4 py-3 text-sm">
+          <div className="flex items-baseline justify-between mb-1.5">
+            <span className="font-medium text-zinc-900">
+              {fmtMMDD(o.orderDate)} {o.kind === 'food' ? '🍱' : '🥤'} {o.vendorName}
+            </span>
+            <span className="text-xs font-semibold text-zinc-700 tabular-nums">
+              NT$ {o.totalAmount}
+            </span>
+          </div>
+          <ul className="space-y-0.5 ml-2">
+            {o.items.map((it, i) => (
+              <li key={i} className="text-xs text-zinc-700">
+                <span>{it.item_name} ×{it.quantity}</span>
+                <span className="text-zinc-400 ml-2 tabular-nums">NT$ {it.item_price * it.quantity}</span>
+                {it.note && (
+                  <span className="ml-2 text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded text-[10px]">
+                    📝 {it.note}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function fmtMMDD(ymd: string): string {
+  if (!ymd) return '';
+  const [, m, d] = ymd.split('-');
+  return `${parseInt(m, 10)}/${parseInt(d, 10)}`;
 }
 
 function SettlementRow({
@@ -346,15 +408,28 @@ function SettlementRow({
 
   const isPaid = settlement.payment !== null;
   const amountMismatch = isPaid && settlement.payment!.amount !== settlement.totalAmount;
+  const hasOrders = settlement.orders.length > 0;
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <>
       <tr>
         <td className="px-4 py-3 text-sm font-medium text-zinc-900 truncate">
-          {settlement.employeeName}
-          {!settlement.employeeId && (
-            <span className="ml-1 text-xs text-zinc-400">（已刪除）</span>
-          )}
+          <div className="flex items-center gap-2">
+            <span>{settlement.employeeName}</span>
+            {!settlement.employeeId && (
+              <span className="text-xs text-zinc-400">（已刪除）</span>
+            )}
+            {hasOrders && (
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                className="text-xs text-blue-600 hover:text-blue-800 underline shrink-0"
+              >
+                {expanded ? '收起' : '看明細'}
+              </button>
+            )}
+          </div>
         </td>
         <td className="px-4 py-3 text-sm text-zinc-600">
           {settlement.orderCount}
@@ -406,6 +481,13 @@ function SettlementRow({
           )}
         </td>
       </tr>
+      {expanded && hasOrders && (
+        <tr>
+          <td colSpan={5} className="p-0">
+            <OrderDetailsList orders={settlement.orders} />
+          </td>
+        </tr>
+      )}
       {error && (
         <tr>
           <td colSpan={5} className="px-4 py-2 bg-red-50 text-sm text-red-700">
