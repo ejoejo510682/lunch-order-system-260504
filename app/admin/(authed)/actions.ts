@@ -41,8 +41,18 @@ export async function openSession(
   if (autoClose === null) return { error: '無效的自動結單時間' };
 
   const supabase = await createClient();
+  const today = getTodayInTaipei();
+
+  // 嘗試先刪除同日同類別的「已取消」場次（若還有訂單會被 FK 擋下，下面 INSERT 也會 23505 失敗）
+  await supabase
+    .from('daily_sessions')
+    .delete()
+    .eq('order_date', today)
+    .eq('kind', kind)
+    .eq('status', 'cancelled');
+
   const { error } = await supabase.from('daily_sessions').insert({
-    order_date:    getTodayInTaipei(),
+    order_date:    today,
     vendor_id:     vendorId,
     kind,
     auto_close_at: autoClose ? buildTodayTimestamp(autoClose) : null,
@@ -51,7 +61,7 @@ export async function openSession(
 
   if (error) {
     if (error.code === '23505') {
-      return { error: `今日「${kind === 'food' ? '吃的' : '喝的'}」場次已存在` };
+      return { error: `今日「${kind === 'food' ? '吃的' : '喝的'}」場次已存在（取消的場次仍有訂單未處理）` };
     }
     return { error: `開單失敗：${error.message}` };
   }

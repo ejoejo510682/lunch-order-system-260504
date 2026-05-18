@@ -190,14 +190,30 @@ function SessionCard({
       </div>
 
       <div className="px-4 sm:px-6 py-5">
-        {!session ? (
-          <NoSessionView kind={kind} canEdit={canEdit} hasVendors={vendors.length > 0} onOpen={() => setDialog({ mode: 'open' })} />
+        {!session || session.status === 'cancelled' ? (
+          <>
+            {session?.status === 'cancelled' && (
+              <div className="mb-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm">
+                <p className="font-medium text-red-800">上一場已取消</p>
+                {session.cancellation_reason && (
+                  <p className="text-xs text-red-700 mt-0.5">原因：{session.cancellation_reason}</p>
+                )}
+              </div>
+            )}
+            <NoSessionView
+              kind={kind}
+              canEdit={canEdit}
+              hasVendors={vendors.length > 0}
+              onOpen={() => setDialog({ mode: 'open' })}
+              isReopen={session?.status === 'cancelled'}
+            />
+          </>
         ) : (
           <SessionInfoView session={session} stats={stats} />
         )}
       </div>
 
-      {session && (
+      {session && session.status !== 'cancelled' && (
         <div className="px-4 sm:px-6 py-3 bg-zinc-50 border-t border-zinc-100">
           <Link
             href={`/admin/sessions/${session.id}`}
@@ -360,15 +376,19 @@ function NoSessionView({
   canEdit,
   hasVendors,
   onOpen,
+  isReopen = false,
 }: {
   kind: Kind;
   canEdit: boolean;
   hasVendors: boolean;
   onOpen: () => void;
+  isReopen?: boolean;
 }) {
   return (
     <div className="text-center py-6">
-      <p className="text-sm text-zinc-500 mb-4">今日尚未開單</p>
+      {!isReopen && (
+        <p className="text-sm text-zinc-500 mb-4">今日尚未開單</p>
+      )}
       {canEdit ? (
         hasVendors ? (
           <button
@@ -376,7 +396,7 @@ function NoSessionView({
             onClick={onOpen}
             className="px-5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium transition"
           >
-            + 開單
+            {isReopen ? '+ 重新開單' : '+ 開單'}
           </button>
         ) : (
           <p className="text-xs text-zinc-400">
