@@ -8,6 +8,7 @@ import {
   openSession,
   closeSession,
   cancelSession,
+  changeSessionVendor,
   type SessionActionState,
 } from './actions';
 
@@ -107,7 +108,8 @@ export function TodayOverview({ today, sessions, vendors, stats, canEdit }: Prop
 type DialogState =
   | { mode: 'closed' }
   | { mode: 'open' }
-  | { mode: 'cancel' };
+  | { mode: 'cancel' }
+  | { mode: 'change-vendor' };
 
 function SessionCard({
   kind,
@@ -149,7 +151,16 @@ function SessionCard({
           {session && <StatusBadge status={session.status} />}
         </div>
         {canEdit && session?.status === 'open' && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {(stats?.count ?? 0) === 0 && (
+              <button
+                type="button"
+                onClick={() => setDialog({ mode: 'change-vendor' })}
+                className="flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-lg text-sm font-medium border border-zinc-300 text-zinc-700 hover:bg-zinc-100 transition"
+              >
+                ✏️ 改廠商
+              </button>
+            )}
             <button
               type="button"
               onClick={handleClose}
@@ -208,7 +219,123 @@ function SessionCard({
           <CancelSessionForm sessionId={session.id} kindLabel={label} stats={stats} onClose={closeDialog} />
         </Modal>
       )}
+
+      {dialog.mode === 'change-vendor' && session && (
+        <Modal title={`改廠商：${label}`} onClose={closeDialog}>
+          <ChangeVendorForm
+            sessionId={session.id}
+            currentVendorId={session.vendor?.id ?? null}
+            currentVendorName={session.vendor?.name ?? '（廠商已刪除）'}
+            vendors={vendors}
+            onClose={closeDialog}
+          />
+        </Modal>
+      )}
     </div>
+  );
+}
+
+// ---------- 改廠商表單 ----------
+
+function ChangeVendorForm({
+  sessionId,
+  currentVendorId,
+  currentVendorName,
+  vendors,
+  onClose,
+}: {
+  sessionId: string;
+  currentVendorId: string | null;
+  currentVendorName: string;
+  vendors: VendorOption[];
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [newVendorId, setNewVendorId] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newVendorId) {
+      setError('請選擇新廠商');
+      return;
+    }
+    if (newVendorId === currentVendorId) {
+      setError('新廠商與目前廠商相同');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const r = await changeSessionVendor({ sessionId, newVendorId });
+      if (!r.ok) {
+        setError(r.error ?? '更新失敗');
+        return;
+      }
+      onClose();
+      router.refresh();
+    });
+  };
+
+  const selectableVendors = vendors.filter((v) => v.id !== currentVendorId);
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="bg-zinc-50 rounded-lg px-3 py-2 text-sm">
+        <span className="text-zinc-500">目前廠商：</span>
+        <span className="font-medium text-zinc-900">{currentVendorName}</span>
+      </div>
+
+      <div>
+        <label htmlFor="new_vendor" className="block text-sm font-medium text-zinc-700 mb-1">
+          改成 <span className="text-red-500">*</span>
+        </label>
+        <select
+          id="new_vendor"
+          value={newVendorId}
+          onChange={(e) => setNewVendorId(e.target.value)}
+          required
+          disabled={pending}
+          className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition disabled:bg-zinc-50"
+        >
+          <option value="" disabled>請選擇新廠商</option>
+          {selectableVendors.map((v) => (
+            <option key={v.id} value={v.id}>{v.name}</option>
+          ))}
+        </select>
+        {selectableVendors.length === 0 && (
+          <p className="text-xs text-zinc-500 mt-1">沒有其他同類別的啟用廠商可選</p>
+        )}
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-800">
+        💡 改廠商不會影響自動結單時間。如果還沒有人點餐才能直接改；有訂單的話請先「取消整場」。
+      </div>
+
+      {error && (
+        <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      <div className="flex gap-2 justify-end pt-2">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={pending}
+          className="px-4 py-2 rounded-lg text-sm text-zinc-700 hover:bg-zinc-100 transition disabled:opacity-50"
+        >
+          取消
+        </button>
+        <button
+          type="submit"
+          disabled={pending || !newVendorId}
+          className="px-4 py-2 rounded-lg text-sm bg-zinc-900 hover:bg-zinc-800 text-white font-medium transition disabled:opacity-50"
+        >
+          {pending ? '更新中…' : '確認改廠商'}
+        </button>
+      </div>
+    </form>
   );
 }
 

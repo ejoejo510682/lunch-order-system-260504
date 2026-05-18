@@ -78,6 +78,64 @@ export async function closeSession(sessionId: string) {
   revalidatePath(PATH);
 }
 
+export async function changeSessionVendor(input: {
+  sessionId: string;
+  newVendorId: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  await requireRole(['admin', 'orderer']);
+  const { sessionId, newVendorId } = input;
+
+  if (!sessionId) return { ok: false, error: '無效的場次' };
+  if (!newVendorId) return { ok: false, error: '請選擇新廠商' };
+
+  const supabase = await createClient();
+
+  // 1. 撈場次狀態
+  const { data: session } = await supabase
+    .from('daily_sessions')
+    .select('id, status, kind, vendor_id')
+    .eq('id', sessionId)
+    .maybeSingle();
+
+  if (!session) return { ok: false, error: '場次不存在' };
+  if (session.status !== 'open') return { ok: false, error: '只有「進行中」的場次才能改廠商' };
+  if (session.vendor_id === newVendorId) return { ok: false, error: '新廠商與目前廠商相同' };
+
+  // 2. 確認沒有有效訂單
+  const { count, error: countErr } = await supabase
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .eq('session_id', sessionId)
+    .eq('status', 'submitted');
+  if (countErr) return { ok: false, error: `檢查訂單失敗：${countErr.message}` };
+  if ((count ?? 0) > 0) {
+    return { ok: false, error: '此場次已有員工點餐，無法直接改廠商。請先「取消整場」再重新開單。' };
+  }
+
+  // 3. 確認新廠商存在、啟用、且同類別
+  const { data: vendor } = await supabase
+    .from('vendors')
+    .select('id, kind, is_active')
+    .eq('id', newVendorId)
+    .maybeSingle();
+  if (!vendor) return { ok: false, error: '新廠商不存在' };
+  if (!vendor.is_active) return { ok: false, error: '新廠商已停用' };
+  if (vendor.kind !== session.kind) {
+    return { ok: false, error: `新廠商分類不符（場次是${session.kind === 'food' ? '吃的' : '喝的'}）` };
+  }
+
+  // 4. 更新
+  const { error: updateErr } = await supabase
+    .from('daily_sessions')
+    .update({ vendor_id: newVendorId })
+    .eq('id', sessionId);
+  if (updateErr) return { ok: false, error: `更新失敗：${updateErr.message}` };
+
+  revalidatePath(PATH);
+  revalidatePath(`/admin/sessions/${sessionId}`);
+  return { ok: true };
+}
+
 export async function cancelSession(
   _prev: SessionActionState,
   formData: FormData,
