@@ -9,9 +9,10 @@ export interface CurrentAdmin {
   email: string;
   name: string;
   role: AdminRole;
+  expires_at: string | null;
 }
 
-// 取目前登入的後台帳號（含 role）。沒登入或不在 admin_users 中 → 回傳 null。
+// 取目前登入的後台帳號（含 role）。沒登入、不在 admin_users 中、或帳號已過期 → 回傳 null。
 export async function getCurrentAdmin(): Promise<CurrentAdmin | null> {
   const supabase = await createClient();
 
@@ -20,11 +21,19 @@ export async function getCurrentAdmin(): Promise<CurrentAdmin | null> {
 
   const { data: admin } = await supabase
     .from('admin_users')
-    .select('id, email, name, role')
+    .select('id, email, name, role, expires_at')
     .eq('id', authData.user.id)
     .single();
 
   if (!admin) return null;
+
+  // 帳號過期檢查
+  if (admin.expires_at && new Date(admin.expires_at) <= new Date()) {
+    // 自動登出
+    await supabase.auth.signOut();
+    return null;
+  }
+
   return admin as CurrentAdmin;
 }
 
