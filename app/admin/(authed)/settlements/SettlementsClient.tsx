@@ -13,6 +13,7 @@ export interface PaymentInfo {
 
 export interface OrderDetail {
   id: string;
+  sessionId: string;
   orderDate: string;
   kind: 'food' | 'drink';
   vendorName: string;
@@ -336,11 +337,11 @@ function OrderDetailsList({ orders }: { orders: OrderDetail[] }) {
     <div className="border-t border-zinc-100 bg-zinc-50/50 divide-y divide-zinc-100">
       {orders.map((o) => (
         <div key={o.id} className="px-4 py-3 text-sm">
-          <div className="flex items-baseline justify-between mb-1.5">
+          <div className="flex items-baseline justify-between mb-1.5 gap-2">
             <span className="font-medium text-zinc-900">
               {fmtMMDD(o.orderDate)} {o.kind === 'food' ? '🍱' : '🥤'} {o.vendorName}
             </span>
-            <span className="text-xs font-semibold text-zinc-700 tabular-nums">
+            <span className="text-xs font-semibold text-zinc-700 tabular-nums shrink-0">
               NT$ {o.totalAmount}
             </span>
           </div>
@@ -357,6 +358,16 @@ function OrderDetailsList({ orders }: { orders: OrderDetail[] }) {
               </li>
             ))}
           </ul>
+          {o.sessionId && (
+            <div className="mt-2 ml-2">
+              <a
+                href={`/admin/sessions/${o.sessionId}`}
+                className="text-xs text-blue-600 hover:text-blue-800 underline"
+              >
+                進入場次調整訂單 →
+              </a>
+            </div>
+          )}
         </div>
       ))}
     </div>

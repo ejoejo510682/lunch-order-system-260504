@@ -34,7 +34,7 @@ export default async function SettlementsPage({ searchParams }: Props) {
     .from('orders')
     .select(`
       id, employee_id, employee_name, total_amount, status, submitted_at,
-      session:daily_sessions ( status, order_date, kind, vendor:vendors ( name ) ),
+      session:daily_sessions ( id, status, order_date, kind, vendor:vendors ( name ) ),
       items:order_items ( item_name, item_price, quantity, note )
     `)
     .gte('submitted_at', `${range.start}T00:00:00+08:00`)
@@ -52,6 +52,7 @@ export default async function SettlementsPage({ searchParams }: Props) {
     total_amount: number;
     submitted_at: string;
     session: {
+      id: string;
       status: 'open' | 'closed' | 'cancelled';
       order_date: string;
       kind: 'food' | 'drink';
@@ -67,6 +68,7 @@ export default async function SettlementsPage({ searchParams }: Props) {
     const key = o.employee_id ?? `__deleted__${o.employee_name}`;
     const orderDetail = {
       id:           o.id,
+      sessionId:    o.session?.id ?? '',
       orderDate:    o.session?.order_date ?? '',
       kind:         o.session?.kind ?? 'food',
       vendorName:   o.session?.vendor?.name ?? '（廠商已刪除）',
