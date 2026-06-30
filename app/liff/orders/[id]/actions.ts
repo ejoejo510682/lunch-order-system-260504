@@ -84,8 +84,8 @@ export async function updateOrderItems({
     .single();
 
   if (!session)              return { ok: false, error: '場次不存在' };
-  if (session.status !== 'open') {
-    return { ok: false, error: '場次已結單，無法修改訂單' };
+  if (session.status === 'cancelled') {
+    return { ok: false, error: '場次已取消，無法修改訂單' };
   }
 
   const ids = items.map((i) => i.menuItemId);

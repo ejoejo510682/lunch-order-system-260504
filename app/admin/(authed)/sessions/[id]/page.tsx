@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireRole } from '@/lib/auth/getCurrentAdmin';
 import { createClient } from '@/lib/supabase/server';
-import { SessionDetailClient, type SessionData, type OrderForAdmin, type MenuItemOption } from './SessionDetailClient';
+import { SessionDetailClient, type SessionData, type OrderForAdmin, type MenuItemOption, type EmployeeOption } from './SessionDetailClient';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -65,6 +65,13 @@ export default async function SessionDetailPage({ params }: Props) {
     menuItems = (items ?? []) as MenuItemOption[];
   }
 
+  // 撈員工列表（給「新增訂單」選人用）
+  const { data: empData } = await supabase
+    .from('employees')
+    .select('id, name')
+    .order('name');
+  const employees = (empData ?? []) as EmployeeOption[];
+
   return (
     <div className="space-y-4">
       <div>
@@ -72,7 +79,12 @@ export default async function SessionDetailPage({ params }: Props) {
           ← 返回今日總覽
         </Link>
       </div>
-      <SessionDetailClient session={session} orders={orders} menuItems={menuItems} />
+      <SessionDetailClient
+        session={session}
+        orders={orders}
+        menuItems={menuItems}
+        employees={employees}
+      />
     </div>
   );
 }

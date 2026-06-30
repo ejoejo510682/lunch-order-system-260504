@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import {
   openSession,
-  closeSession,
   cancelSession,
   changeSessionVendor,
   type SessionActionState,
@@ -125,22 +124,9 @@ function SessionCard({
   canEdit: boolean;
 }) {
   const [dialog, setDialog] = useState<DialogState>({ mode: 'closed' });
-  const [closing, startClosing] = useTransition();
   const closeDialog = () => setDialog({ mode: 'closed' });
 
   const { label, emoji } = KIND_LABEL[kind];
-
-  const handleClose = () => {
-    if (!session) return;
-    if (!confirm(`確定要結束「${label}」場次嗎？\n結單後員工就不能再點餐。`)) return;
-    startClosing(async () => {
-      try {
-        await closeSession(session.id);
-      } catch (e) {
-        alert(e instanceof Error ? e.message : String(e));
-      }
-    });
-  };
 
   return (
     <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
@@ -150,9 +136,9 @@ function SessionCard({
           <h2 className="text-lg font-semibold text-zinc-900">{label}</h2>
           {session && <StatusBadge status={session.status} />}
         </div>
-        {canEdit && session?.status === 'open' && (
+        {canEdit && (session?.status === 'open' || session?.status === 'closed') && (
           <div className="flex flex-wrap gap-2">
-            {(stats?.count ?? 0) === 0 && (
+            {session.status === 'open' && (stats?.count ?? 0) === 0 && (
               <button
                 type="button"
                 onClick={() => setDialog({ mode: 'change-vendor' })}
@@ -163,29 +149,12 @@ function SessionCard({
             )}
             <button
               type="button"
-              onClick={handleClose}
-              disabled={closing}
-              className="flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-lg text-sm font-medium bg-zinc-900 hover:bg-zinc-800 text-white transition disabled:opacity-50"
-            >
-              {closing ? '結單中...' : '結單'}
-            </button>
-            <button
-              type="button"
               onClick={() => setDialog({ mode: 'cancel' })}
               className="flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-lg text-sm font-medium border border-red-200 text-red-700 hover:bg-red-50 transition"
             >
               取消整場
             </button>
           </div>
-        )}
-        {canEdit && session?.status === 'closed' && (
-          <button
-            type="button"
-            onClick={() => setDialog({ mode: 'cancel' })}
-            className="px-3 py-2 sm:py-1.5 rounded-lg text-sm font-medium border border-red-200 text-red-700 hover:bg-red-50 transition"
-          >
-            取消整場
-          </button>
         )}
       </div>
 
@@ -440,19 +409,9 @@ function SessionInfoView({
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <Stat label="訂單筆數" value={`${orderCount} 筆`} />
         <Stat label="總金額" value={`NT$ ${total}`} />
-        <Stat
-          label={session.status === 'open' ? '自動結單' : session.status === 'closed' ? '結單時間' : '取消時間'}
-          value={
-            session.status === 'open'
-              ? formatTime(session.auto_close_at) ?? '未設定'
-              : session.status === 'closed'
-              ? formatTime(session.closed_at) ?? '—'
-              : formatTime(session.cancelled_at) ?? '—'
-          }
-        />
       </div>
 
       {orderCount === 0 && session.status === 'open' && (
@@ -488,13 +447,6 @@ function formatTime(iso: string | null): string | null {
 }
 
 // ---------- open session form ----------
-
-const TIME_OPTIONS: { value: string; label: string }[] = [
-  { value: '10:00', label: '10:00' },
-  { value: '10:30', label: '10:30' },
-  { value: '11:00', label: '11:00' },
-  { value: '',      label: '不設定' },
-];
 
 const initialState: SessionActionState = {};
 
@@ -540,33 +492,8 @@ function OpenSessionForm({
         </select>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-zinc-700 mb-2">
-          自動結單時間
-        </label>
-        <div className="grid grid-cols-4 gap-2">
-          {TIME_OPTIONS.map((opt) => (
-            <label
-              key={opt.value || 'none'}
-              className="flex items-center justify-center px-3 py-2 rounded-lg border border-zinc-300 cursor-pointer hover:bg-zinc-50 has-[:checked]:bg-blue-50 has-[:checked]:border-blue-400 transition"
-            >
-              <input
-                type="radio"
-                name="auto_close"
-                value={opt.value}
-                required
-                disabled={pending}
-                defaultChecked={opt.value === ''}
-                className="sr-only"
-              />
-              <span className="text-sm font-medium">{opt.label}</span>
-            </label>
-          ))}
-        </div>
-        <p className="text-xs text-zinc-500 mt-2">
-          設定後系統會在該時間自動結單；選「不設定」需手動結單
-        </p>
-      </div>
+      {/* 不結單機制：場次永遠 open，要結束就「取消整場」 */}
+      <input type="hidden" name="auto_close" value="" />
 
       {state.error && (
         <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">

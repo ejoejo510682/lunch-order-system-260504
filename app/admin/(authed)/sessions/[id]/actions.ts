@@ -19,6 +19,97 @@ export interface AdminUpdateOrderResult {
   error?: string;
 }
 
+// 後台替員工新增訂單（不受場次 closed 限制，cancelled 才擋）
+export async function adminCreateOrder(input: {
+  sessionId: string;
+  employeeId: string;
+  items: AdminEditItem[];
+  reason: string;
+}): Promise<{ ok: boolean; error?: string; orderId?: string }> {
+  const admin = await requireRole(['admin', 'orderer']);
+
+  const { sessionId, employeeId, items, reason } = input;
+
+  if (!sessionId) return { ok: false, error: '無效的場次' };
+  if (!employeeId) return { ok: false, error: '請選擇員工' };
+  if (!items || items.length === 0) return { ok: false, error: '至少要有一個品項' };
+  if (!reason?.trim()) return { ok: false, error: '新增原因為必填' };
+
+  for (const it of items) {
+    if (!it.item_name?.trim()) return { ok: false, error: '每個品項都必須有名稱' };
+    if (!Number.isInteger(it.item_price) || it.item_price < 0) {
+      return { ok: false, error: `「${it.item_name}」的價格不正確` };
+    }
+    if (!Number.isInteger(it.quantity) || it.quantity <= 0) {
+      return { ok: false, error: `「${it.item_name}」的數量必須為正整數` };
+    }
+  }
+
+  // 用 service_role 繞過 RLS，因為要寫 orders 給其他 employee
+  const sb = createAdminClient();
+
+  // 1. 撈場次資訊
+  const { data: session, error: sessErr } = await sb
+    .from('daily_sessions')
+    .select('id, status, vendor_id')
+    .eq('id', sessionId)
+    .maybeSingle();
+  if (sessErr || !session) return { ok: false, error: '場次不存在' };
+  if (session.status === 'cancelled') return { ok: false, error: '場次已取消，無法新增訂單' };
+
+  // 2. 撈員工姓名（快照用）
+  const { data: emp } = await sb
+    .from('employees')
+    .select('id, name')
+    .eq('id', employeeId)
+    .maybeSingle();
+  if (!emp) return { ok: false, error: '員工不存在' };
+
+  const now = new Date();
+  const total = items.reduce((s, it) => s + it.item_price * it.quantity, 0);
+
+  // 3. INSERT order
+  const { data: order, error: orderErr } = await sb
+    .from('orders')
+    .insert({
+      session_id:      sessionId,
+      employee_id:     employeeId,
+      employee_name:   emp.name,
+      total_amount:    total,
+      status:          'submitted',
+      submitted_at:    now.toISOString(),
+      editable_until:  new Date(now.getTime() + 5 * 60 * 1000).toISOString(),
+    })
+    .select('id')
+    .single();
+  if (orderErr || !order) return { ok: false, error: `建立訂單失敗：${orderErr?.message ?? '未知'}` };
+
+  // 4. INSERT order_items（標記為後台新增）
+  const { error: itemsErr } = await sb
+    .from('order_items')
+    .insert(items.map((it) => ({
+      order_id:        order.id,
+      menu_item_id:    it.menu_item_id,
+      item_name:       it.item_name.trim(),
+      item_price:      it.item_price,
+      quantity:        it.quantity,
+      note:            it.note?.trim() || null,
+      modified_at:     now.toISOString(),
+      modified_by:     admin.id,
+      modified_reason: `[後台新增] ${reason.trim()}`,
+    })));
+  if (itemsErr) {
+    // 補救：刪剛建的 order
+    await sb.from('orders').delete().eq('id', order.id);
+    return { ok: false, error: `建立訂單失敗（明細）：${itemsErr.message}` };
+  }
+
+  revalidatePath(`/admin/sessions/${sessionId}`);
+  revalidatePath('/admin');
+  revalidatePath('/admin/settlements');
+  return { ok: true, orderId: order.id };
+}
+
 export async function adminUpdateOrder(input: {
   orderId: string;
   items: AdminEditItem[];

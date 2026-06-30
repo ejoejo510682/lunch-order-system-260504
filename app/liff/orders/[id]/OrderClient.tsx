@@ -65,7 +65,8 @@ export function OrderClient({
   const remainingSec = Math.floor((remainingMs % 60000) / 1000);
   const isEditable = remainingMs > 0 && order.status === 'submitted';
 
-  const sessionOpen = order.session?.status === 'open';
+  // 場次只要不是「取消」就允許員工 5 分鐘修改（不要求 open，因此被結單也能改）
+  const sessionOpen = order.session?.status !== 'cancelled';
   const canStillModify = isEditable && sessionOpen;
 
   const submittedAt = formatDateTime(order.submitted_at);
@@ -147,7 +148,7 @@ export function OrderClient({
           ) : order.status !== 'cancelled' ? (
             <p className="text-center text-xs text-zinc-500 py-2">
               {!sessionOpen
-                ? '場次已結單，如需修改請聯絡訂餐員'
+                ? '場次已取消，如需修改請聯絡訂餐員'
                 : '已超過 5 分鐘可修改時限，如需修改請聯絡訂餐員'}
             </p>
           ) : null}

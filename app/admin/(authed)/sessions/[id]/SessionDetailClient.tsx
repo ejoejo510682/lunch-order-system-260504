@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { adminUpdateOrder, adminCancelOrder, bulkUpdateItemPrice, type AdminEditItem } from './actions';
+import { adminUpdateOrder, adminCancelOrder, bulkUpdateItemPrice, adminCreateOrder, type AdminEditItem } from './actions';
 
 // ---------- types ----------
 
@@ -44,6 +44,11 @@ export interface MenuItemOption {
   price: number;
 }
 
+export interface EmployeeOption {
+  id: string;
+  name: string;
+}
+
 const KIND_LABEL: Record<'food' | 'drink', { label: string; emoji: string }> = {
   food:  { label: '吃的', emoji: '🍱' },
   drink: { label: '喝的', emoji: '🥤' },
@@ -53,12 +58,15 @@ export function SessionDetailClient({
   session,
   orders,
   menuItems,
+  employees,
 }: {
   session: SessionData;
   orders: OrderForAdmin[];
   menuItems: MenuItemOption[];
+  employees: EmployeeOption[];
 }) {
   const [editingOrder, setEditingOrder] = useState<OrderForAdmin | null>(null);
+  const [creatingOrder, setCreatingOrder] = useState(false);
 
   const validOrders = orders.filter((o) => o.status === 'submitted');
   const cancelledOrders = orders.filter((o) => o.status === 'cancelled');
@@ -113,9 +121,20 @@ export function SessionDetailClient({
       )}
 
       <section className="space-y-2">
-        <h2 className="text-base font-semibold text-zinc-800 px-1">
-          訂單列表（{validOrders.length} 筆）
-        </h2>
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-base font-semibold text-zinc-800">
+            訂單列表（{validOrders.length} 筆）
+          </h2>
+          {session.status !== 'cancelled' && (
+            <button
+              type="button"
+              onClick={() => setCreatingOrder(true)}
+              className="px-3 py-1.5 rounded-lg text-sm bg-zinc-900 hover:bg-zinc-800 text-white font-medium transition"
+            >
+              + 替員工新增訂單
+            </button>
+          )}
+        </div>
         {validOrders.length === 0 ? (
           <div className="bg-white rounded-2xl border border-zinc-200 p-8 text-center text-zinc-500 text-sm">
             目前還沒有訂單
@@ -154,6 +173,249 @@ export function SessionDetailClient({
           onClose={() => setEditingOrder(null)}
         />
       )}
+
+      {creatingOrder && (
+        <CreateOrderModal
+          sessionId={session.id}
+          employees={employees}
+          existingEmployeeIds={validOrders.map((o) => o.employee_id).filter((e): e is string => !!e)}
+          menuItems={menuItems}
+          onClose={() => setCreatingOrder(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------- 替員工新增訂單 modal ----------
+
+function CreateOrderModal({
+  sessionId,
+  employees,
+  existingEmployeeIds,
+  menuItems,
+  onClose,
+}: {
+  sessionId: string;
+  employees: EmployeeOption[];
+  existingEmployeeIds: string[];
+  menuItems: MenuItemOption[];
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [employeeId, setEmployeeId] = useState('');
+  const [items, setItems] = useState<EditableItem[]>([]);
+  const [reason, setReason] = useState('場次結單後補單');
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const total = items.reduce((s, it) => s + it.item_price * it.quantity, 0);
+
+  const updateItem = (tempId: string, patch: Partial<EditableItem>) => {
+    setItems((prev) => prev.map((it) => (it.tempId === tempId ? { ...it, ...patch } : it)));
+  };
+  const removeItem = (tempId: string) => {
+    setItems((prev) => prev.filter((it) => it.tempId !== tempId));
+  };
+  const addItemFromMenu = (m: MenuItemOption) => {
+    setItems((prev) => [...prev, {
+      tempId: `new-${nextTempId++}`,
+      menu_item_id: m.id,
+      item_name:    m.name,
+      item_price:   m.price,
+      quantity:     1,
+      note:         '',
+    }]);
+  };
+  const addCustomItem = () => {
+    setItems((prev) => [...prev, {
+      tempId: `new-${nextTempId++}`,
+      menu_item_id: null,
+      item_name:    '',
+      item_price:   0,
+      quantity:     1,
+      note:         '',
+    }]);
+  };
+
+  const handleSubmit = () => {
+    if (!employeeId) { setError('請選擇員工'); return; }
+    if (items.length === 0) { setError('至少加一個品項'); return; }
+    if (!reason.trim()) { setError('新增原因為必填'); return; }
+    setError(null);
+    startTransition(async () => {
+      const r = await adminCreateOrder({
+        sessionId,
+        employeeId,
+        items: items.map((it) => ({
+          menu_item_id: it.menu_item_id,
+          item_name:    it.item_name,
+          item_price:   it.item_price,
+          quantity:     it.quantity,
+          note:         it.note,
+        })),
+        reason,
+      });
+      if (!r.ok) { setError(r.error ?? '建立失敗'); return; }
+      onClose();
+      router.refresh();
+    });
+  };
+
+  // 已有訂單的員工提示（不擋，員工可有多筆訂單）
+  const selectedHasOrder = employeeId && existingEmployeeIds.includes(employeeId);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-stretch sm:items-center justify-center sm:p-4">
+      <div className="bg-white sm:rounded-2xl shadow-xl w-full sm:max-w-lg h-full sm:h-auto sm:max-h-[90vh] flex flex-col">
+        <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-zinc-200 flex items-center justify-between">
+          <h2 className="text-base font-bold text-zinc-900">替員工新增訂單</h2>
+          <button type="button" onClick={onClose} disabled={pending} className="text-zinc-500 text-sm px-2 py-1 rounded hover:bg-zinc-100">關閉</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-4">
+          {/* 員工選擇 */}
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-1">
+              員工 <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={employeeId}
+              onChange={(e) => setEmployeeId(e.target.value)}
+              required
+              disabled={pending}
+              className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-200 outline-none"
+            >
+              <option value="" disabled>請選擇員工</option>
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>{e.name}</option>
+              ))}
+            </select>
+            {selectedHasOrder && (
+              <p className="text-xs text-amber-700 mt-1">
+                ⚠️ 該員工本場次已有訂單，這會新增「另一筆」訂單
+              </p>
+            )}
+          </div>
+
+          {/* 已加的品項 */}
+          {items.length > 0 && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-zinc-700">已加品項</label>
+              {items.map((it) => (
+                <div key={it.tempId} className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="text"
+                      value={it.item_name}
+                      onChange={(e) => updateItem(it.tempId, { item_name: e.target.value })}
+                      placeholder="品名"
+                      disabled={pending}
+                      className="flex-1 px-3 py-2 rounded-lg border border-zinc-300 text-sm"
+                    />
+                    <button type="button" onClick={() => removeItem(it.tempId)} disabled={pending} className="px-2 py-1 text-xs text-red-600 hover:text-red-800">刪除</button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-zinc-500 w-12">價格</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={it.item_price}
+                      onChange={(e) => updateItem(it.tempId, { item_price: parseInt(e.target.value || '0', 10) })}
+                      disabled={pending}
+                      className="w-24 px-2 py-1 rounded border border-zinc-300 text-sm"
+                    />
+                    <span className="text-xs text-zinc-500 ml-3">數量</span>
+                    <button type="button" onClick={() => updateItem(it.tempId, { quantity: Math.max(1, it.quantity - 1) })} disabled={pending || it.quantity <= 1} className="w-7 h-7 rounded bg-zinc-200 hover:bg-zinc-300 disabled:opacity-30">−</button>
+                    <span className="w-8 text-center text-sm font-medium">{it.quantity}</span>
+                    <button type="button" onClick={() => updateItem(it.tempId, { quantity: it.quantity + 1 })} disabled={pending} className="w-7 h-7 rounded bg-zinc-900 hover:bg-zinc-800 text-white">+</button>
+                    <span className="ml-auto text-sm font-medium text-zinc-900">NT$ {it.item_price * it.quantity}</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={it.note}
+                    onChange={(e) => updateItem(it.tempId, { note: e.target.value })}
+                    placeholder="員工備註（少糖、加料...）"
+                    maxLength={100}
+                    disabled={pending}
+                    className="w-full px-3 py-1.5 rounded border border-zinc-300 text-xs"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 從菜單加入 */}
+          {menuItems.length > 0 && (
+            <div>
+              <p className="text-xs text-zinc-500 mb-2">從菜單加入</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {menuItems.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => addItemFromMenu(m)}
+                    disabled={pending}
+                    className="px-3 py-2 rounded-lg bg-white border border-zinc-300 hover:bg-zinc-50 text-sm text-left transition disabled:opacity-50 flex items-center justify-between gap-2"
+                  >
+                    <span className="truncate font-medium text-zinc-900">{m.name}</span>
+                    <span className="text-xs text-zinc-500 shrink-0">NT$ {m.price}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={addCustomItem}
+            disabled={pending}
+            className="w-full py-2 rounded-lg border border-dashed border-zinc-300 hover:bg-zinc-50 text-sm text-zinc-600 transition"
+          >
+            + 新增自訂品項（不在菜單上）
+          </button>
+
+          {/* 新增原因 */}
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-1">
+              新增原因 <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={2}
+              required
+              disabled={pending}
+              className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-sm resize-none"
+            />
+            <p className="text-xs text-zinc-500 mt-1">員工 LIFF 會看到此原因</p>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">{error}</div>
+          )}
+        </div>
+
+        <div className="px-4 sm:px-5 py-3 sm:py-4 border-t border-zinc-200 bg-zinc-50">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm text-zinc-600">{items.length} 個品項</span>
+            <span className="text-lg font-bold text-zinc-900">NT$ {total}</span>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} disabled={pending} className="px-4 py-2 rounded-lg text-sm text-zinc-700 hover:bg-zinc-100 transition disabled:opacity-50">取消</button>
+            <div className="flex-1" />
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={pending || items.length === 0 || !employeeId || !reason.trim()}
+              className="px-5 py-2.5 rounded-lg text-sm bg-zinc-900 hover:bg-zinc-800 text-white font-bold transition disabled:opacity-40"
+            >
+              {pending ? '建立中…' : '建立訂單'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
