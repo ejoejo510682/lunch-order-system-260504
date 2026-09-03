@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getUnpaidAmount } from './history/actions';
 
 interface Employee {
   id: string;
@@ -21,6 +22,7 @@ export function IdentitySelector({ employees }: { employees: Employee[] }) {
   const [selectedId, setSelectedId] = useState('');
   const [forceSelect, setForceSelect] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [unpaidAmount, setUnpaidAmount] = useState<number | null>(null);
 
   useEffect(() => {
     try {
@@ -29,6 +31,18 @@ export function IdentitySelector({ employees }: { employees: Employee[] }) {
     } catch {}
     setLoaded(true);
   }, []);
+
+  useEffect(() => {
+    if (!saved) {
+      setUnpaidAmount(null);
+      return;
+    }
+    let cancelled = false;
+    getUnpaidAmount(saved.id).then((result) => {
+      if (!cancelled && result.ok) setUnpaidAmount(result.amount);
+    });
+    return () => { cancelled = true; };
+  }, [saved]);
 
   if (!loaded) {
     return <div className="flex-1 flex items-center justify-center text-zinc-400 text-sm">載入中…</div>;
@@ -56,6 +70,11 @@ export function IdentitySelector({ employees }: { employees: Employee[] }) {
           <div className="bg-zinc-50 rounded-2xl border border-zinc-200 p-6 text-center mb-6">
             <p className="text-xs text-zinc-500 mb-1">目前身份</p>
             <p className="text-xl font-bold text-zinc-900">{saved.name}</p>
+            {unpaidAmount !== null && unpaidAmount > 0 && (
+              <p className="text-sm text-red-600 font-medium mt-3">
+                未付款金額：NT${unpaidAmount}
+              </p>
+            )}
           </div>
 
           <button

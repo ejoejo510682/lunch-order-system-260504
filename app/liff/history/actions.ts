@@ -1,7 +1,7 @@
 'use server';
 
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getThisWeekMonFri, shiftWeek } from '@/lib/week';
+import { getThisWeekMonFri, getMonFriOfWeekContaining, shiftWeek } from '@/lib/week';
 
 export interface WeeklyOrder {
   id: string;
@@ -125,4 +125,69 @@ export async function getWeeklyOrders(employeeId: string): Promise<WeeklyResult 
     : null;
 
   return { ok: true, range, orders: formatted, totalAmount, payment: paymentInfo };
+}
+
+export interface UnpaidResult {
+  ok: true;
+  amount: number;
+}
+
+// 未付款金額：只算「已結束的過去週次」（不含本週還在進行中的），
+// 依訂單所屬週彙總金額，扣掉已經被訂餐員勾選付清的週次
+export async function getUnpaidAmount(employeeId: string): Promise<UnpaidResult | WeeklyError> {
+  if (!employeeId) return { ok: false, error: '缺少身份資訊' };
+
+  const supabase = createAdminClient();
+  const { data: emp } = await supabase
+    .from('employees')
+    .select('id')
+    .eq('id', employeeId)
+    .maybeSingle();
+  if (!emp) return { ok: false, error: '員工不存在' };
+
+  const thisWeekStart = getThisWeekMonFri().start;
+
+  const { data: orders, error } = await supabase
+    .from('orders')
+    .select(`
+      total_amount, status,
+      session:daily_sessions ( order_date, status )
+    `)
+    .eq('employee_id', employeeId)
+    .eq('status', 'submitted')
+    .lt('submitted_at', `${thisWeekStart}T00:00:00+08:00`);
+
+  if (error) return { ok: false, error: `查詢失敗：${error.message}` };
+
+  type RawOrder = {
+    total_amount: number;
+    session: { order_date: string; status: 'open' | 'closed' | 'cancelled' } | null;
+  };
+
+  // 依週彙總金額，排除場次已取消的
+  const weekTotals = new Map<string, number>();
+  for (const o of (orders as unknown as RawOrder[]) ?? []) {
+    if (!o.session || o.session.status === 'cancelled') continue;
+    const weekStart = getMonFriOfWeekContaining(o.session.order_date).start;
+    weekTotals.set(weekStart, (weekTotals.get(weekStart) ?? 0) + o.total_amount);
+  }
+
+  if (weekTotals.size === 0) return { ok: true, amount: 0 };
+
+  const { data: payments, error: payErr } = await supabase
+    .from('weekly_payments')
+    .select('week_start')
+    .eq('employee_id', employeeId)
+    .in('week_start', Array.from(weekTotals.keys()));
+
+  if (payErr) return { ok: false, error: `查詢付款紀錄失敗：${payErr.message}` };
+
+  const paidWeeks = new Set((payments ?? []).map((p) => p.week_start));
+
+  let unpaid = 0;
+  for (const [week, amount] of weekTotals) {
+    if (!paidWeeks.has(week)) unpaid += amount;
+  }
+
+  return { ok: true, amount: unpaid };
 }
