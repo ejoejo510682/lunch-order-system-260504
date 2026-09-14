@@ -17,20 +17,17 @@ export interface MarkPaidInput {
 }
 
 export async function markPaid(input: MarkPaidInput): Promise<MarkPaidResult> {
-  const admin = await requireRole(['admin', 'orderer']);
-
   const { employeeId, weekStart, amount, note } = input;
   if (!employeeId || !weekStart) return { ok: false, error: '參數缺失' };
   if (!Number.isInteger(amount) || amount < 0) return { ok: false, error: '金額不正確' };
 
   const supabase = await createClient();
 
-  // 撈員工姓名做快照
-  const { data: employee } = await supabase
-    .from('employees')
-    .select('name')
-    .eq('id', employeeId)
-    .maybeSingle();
+  // 驗證身份跟撈員工姓名快照互不相依，平行做，不用一個等完才做下一個
+  const [admin, { data: employee }] = await Promise.all([
+    requireRole(['admin', 'orderer']),
+    supabase.from('employees').select('name').eq('id', employeeId).maybeSingle(),
+  ]);
 
   if (!employee) return { ok: false, error: '員工不存在' };
 

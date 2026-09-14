@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useOptimistic } from 'react';
 import { markPaid, unmarkPaid } from './actions';
 
 export interface PaymentInfo {
@@ -39,10 +39,12 @@ export function SettlementsClient({
   settlements,
   weekStart,
   weekRange,
+  currentAdminName,
 }: {
   settlements: EmployeeSettlement[];
   weekStart: string;
   weekRange: WeekRange;
+  currentAdminName: string;
 }) {
   if (settlements.length === 0) {
     return (
@@ -73,6 +75,7 @@ export function SettlementsClient({
             key={e.employeeId ?? e.employeeName}
             settlement={e}
             weekStart={weekStart}
+            currentAdminName={currentAdminName}
           />
         ))}
       </ul>
@@ -102,6 +105,7 @@ export function SettlementsClient({
                 key={e.employeeId ?? e.employeeName}
                 settlement={e}
                 weekStart={weekStart}
+                currentAdminName={currentAdminName}
               />
             ))}
           </tbody>
@@ -216,20 +220,12 @@ function CopyLineButton({
   );
 }
 
-function SettlementCard({
-  settlement,
-  weekStart,
-}: {
-  settlement: EmployeeSettlement;
-  weekStart: string;
-}) {
+// 標記/取消付款：點下去馬上先顯示樂觀結果（useOptimistic），不用等後端真的存完、
+// 整頁重新查完資料才看到變化。如果後端回報失敗，畫面會自動退回原本狀態並顯示錯誤訊息。
+function useMarkPaidAction(settlement: EmployeeSettlement, weekStart: string, currentAdminName: string) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [expanded, setExpanded] = useState(false);
-
-  const isPaid = settlement.payment !== null;
-  const amountMismatch = isPaid && settlement.payment!.amount !== settlement.totalAmount;
-  const hasOrders = settlement.orders.length > 0;
+  const [optimisticPayment, setOptimisticPayment] = useOptimistic<PaymentInfo | null>(settlement.payment);
 
   const handleMarkPaid = () => {
     if (!settlement.employeeId) {
@@ -239,6 +235,13 @@ function SettlementCard({
     if (!confirm(`確定標記「${settlement.employeeName}」本週已付清 NT$ ${settlement.totalAmount}？`)) return;
     setError(null);
     startTransition(async () => {
+      setOptimisticPayment({
+        id: 'optimistic',
+        amount: settlement.totalAmount,
+        paidAt: new Date().toISOString(),
+        note: null,
+        paidByName: currentAdminName,
+      });
       const r = await markPaid({
         employeeId: settlement.employeeId!,
         weekStart,
@@ -253,10 +256,31 @@ function SettlementCard({
     if (!confirm(`取消「${settlement.employeeName}」本週的付清標記？`)) return;
     setError(null);
     startTransition(async () => {
+      setOptimisticPayment(null);
       const r = await unmarkPaid(settlement.payment!.id);
       if (!r.ok) setError(r.error ?? '取消失敗');
     });
   };
+
+  return { optimisticPayment, error, pending, handleMarkPaid, handleUnmark };
+}
+
+function SettlementCard({
+  settlement,
+  weekStart,
+  currentAdminName,
+}: {
+  settlement: EmployeeSettlement;
+  weekStart: string;
+  currentAdminName: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const { optimisticPayment, error, pending, handleMarkPaid, handleUnmark } =
+    useMarkPaidAction(settlement, weekStart, currentAdminName);
+
+  const isPaid = optimisticPayment !== null;
+  const amountMismatch = isPaid && optimisticPayment!.amount !== settlement.totalAmount;
+  const hasOrders = settlement.orders.length > 0;
 
   return (
     <li className={`bg-white border rounded-xl overflow-hidden ${isPaid ? 'border-green-200' : 'border-zinc-200'}`}>
@@ -276,7 +300,7 @@ function SettlementCard({
           <span className="text-xs text-zinc-500">{settlement.orderCount} 筆訂單</span>
           {isPaid ? (
             <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 font-medium">
-              ✓ 已付 NT$ {settlement.payment!.amount}
+              ✓ 已付 NT$ {optimisticPayment!.amount}
             </span>
           ) : (
             <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium">
@@ -286,7 +310,7 @@ function SettlementCard({
         </div>
         {amountMismatch && (
           <p className="text-xs text-amber-600 mt-1">
-            ⚠️ 已付 NT${settlement.payment!.amount} 與目前 NT${settlement.totalAmount} 不符
+            ⚠️ 已付 NT${optimisticPayment!.amount} 與目前 NT${settlement.totalAmount} 不符
           </p>
         )}
       </div>
@@ -383,44 +407,19 @@ function fmtMMDD(ymd: string): string {
 function SettlementRow({
   settlement,
   weekStart,
+  currentAdminName,
 }: {
   settlement: EmployeeSettlement;
   weekStart: string;
+  currentAdminName: string;
 }) {
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-
-  const handleMarkPaid = () => {
-    if (!settlement.employeeId) {
-      setError('員工已被刪除，無法標記');
-      return;
-    }
-    if (!confirm(`確定標記「${settlement.employeeName}」本週已付清 NT$ ${settlement.totalAmount}？`)) return;
-    setError(null);
-    startTransition(async () => {
-      const r = await markPaid({
-        employeeId: settlement.employeeId!,
-        weekStart,
-        amount: settlement.totalAmount,
-      });
-      if (!r.ok) setError(r.error ?? '標記失敗');
-    });
-  };
-
-  const handleUnmark = () => {
-    if (!settlement.payment) return;
-    if (!confirm(`取消「${settlement.employeeName}」本週的付清標記？`)) return;
-    setError(null);
-    startTransition(async () => {
-      const r = await unmarkPaid(settlement.payment!.id);
-      if (!r.ok) setError(r.error ?? '取消失敗');
-    });
-  };
-
-  const isPaid = settlement.payment !== null;
-  const amountMismatch = isPaid && settlement.payment!.amount !== settlement.totalAmount;
-  const hasOrders = settlement.orders.length > 0;
   const [expanded, setExpanded] = useState(false);
+  const { optimisticPayment, error, pending, handleMarkPaid, handleUnmark } =
+    useMarkPaidAction(settlement, weekStart, currentAdminName);
+
+  const isPaid = optimisticPayment !== null;
+  const amountMismatch = isPaid && optimisticPayment!.amount !== settlement.totalAmount;
+  const hasOrders = settlement.orders.length > 0;
 
   return (
     <>
@@ -452,15 +451,15 @@ function SettlementRow({
           {isPaid ? (
             <div>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
-                ✓ 已付 NT$ {settlement.payment!.amount}
+                ✓ 已付 NT$ {optimisticPayment!.amount}
               </span>
               <div className="text-xs text-zinc-500 mt-1">
-                {settlement.payment!.paidByName ? `${settlement.payment!.paidByName}　` : ''}
-                {fmtDateTime(settlement.payment!.paidAt)}
+                {optimisticPayment!.paidByName ? `${optimisticPayment!.paidByName}　` : ''}
+                {fmtDateTime(optimisticPayment!.paidAt)}
               </div>
               {amountMismatch && (
                 <div className="text-xs text-amber-600 mt-1">
-                  ⚠️ 已付金額 NT${settlement.payment!.amount} 與目前總額 NT${settlement.totalAmount} 不符
+                  ⚠️ 已付金額 NT${optimisticPayment!.amount} 與目前總額 NT${settlement.totalAmount} 不符
                 </div>
               )}
             </div>

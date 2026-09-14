@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default async function SettlementsPage({ searchParams }: Props) {
-  await requireRole(['admin', 'orderer']);
+  const currentAdmin = await requireRole(['admin', 'orderer']);
   const { week } = await searchParams;
 
   // 解析 week 參數，預設本週
@@ -189,7 +189,12 @@ export default async function SettlementsPage({ searchParams }: Props) {
         </div>
       )}
 
-      <SettlementsClient settlements={settlements} weekStart={range.start} weekRange={range} />
+      <SettlementsClient
+        settlements={settlements}
+        weekStart={range.start}
+        weekRange={range}
+        currentAdminName={currentAdmin.name}
+      />
     </div>
   );
 }
