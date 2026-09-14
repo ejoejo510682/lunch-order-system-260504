@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 
@@ -13,7 +14,9 @@ export interface CurrentAdmin {
 }
 
 // 取目前登入的後台帳號（含 role）。沒登入、不在 admin_users 中、或帳號已過期 → 回傳 null。
-export async function getCurrentAdmin(): Promise<CurrentAdmin | null> {
+// 用 cache() 包住：layout 跟每個 page 都會各自呼叫這個函式，包了之後同一次請求裡
+// 不管呼叫幾次都只會真的問 Supabase 一次，不然每次都要多等好幾百毫秒
+export const getCurrentAdmin = cache(async (): Promise<CurrentAdmin | null> => {
   const supabase = await createClient();
 
   const { data: authData } = await supabase.auth.getUser();
@@ -35,7 +38,7 @@ export async function getCurrentAdmin(): Promise<CurrentAdmin | null> {
   }
 
   return admin as CurrentAdmin;
-}
+});
 
 // 強制要求登入。沒登入 → 重導到 /admin/login。
 export async function requireAdmin(): Promise<CurrentAdmin> {

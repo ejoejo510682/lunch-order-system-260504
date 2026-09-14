@@ -182,6 +182,29 @@
 - 同時上了「後台補單」：admin/orderer 可以直接在場次詳細頁替員工新增訂單（呼應 5/13 那次手動補單的痛點，現在有正式 UI 了）
 - **這次改動沒有同步更新 PROJECT_LOG.md / HANDOFF.md**，是這次（7/28）回補的主因
 
+### 2026-09-14：效能優化 — 減少重複驗證身份的網路請求
+- 使用者反映後台跟排班系統（另一個獨立專案）點按鈕/換頁都很慢，查出來是**同一次操作裡重複問 Supabase「這個人是誰」3 次**：proxy.ts middleware 一次、`(authed)/layout.tsx` 一次、每個 page.tsx 自己又問一次（17 個檔案都這樣寫）。每問一次都是真的連線 Supabase，實測一趟約 150~300ms，加起來很有感
+- 修法：`lib/auth/getCurrentAdmin.ts` 的 `getCurrentAdmin()` 用 React 的 `cache()` 包住，同一次請求裡不管被呼叫幾次都只會真的問一次 Supabase，其他呼叫直接複用結果——不改任何驗證邏輯，純粹省掉重複的網路請求
+- 順便把 `proxy.ts` 的 middleware matcher 從「除了靜態資源以外全部路由都跑」縮小成只管 `/admin/:path*`——LIFF 員工端第一階段本來就沒有 Supabase 登入驗證，跑這個 middleware 對員工端只是白白多一趟連線，沒有任何用處
+- 用未登入狀態測過 `/admin`、`/admin/employees`（layout+page 雙重 requireRole）、`/liff/today` 三種情境，redirect 行為都正常、沒有 runtime error；因為沒有帳密，實際登入後的效能改善程度要使用者自己感受
+
+### 2026-09-14（續）：效能優化第二步 — 快取廠商/菜單/員工這類幾乎不變的資料
+- 使用者確認第一步變快後，想再更快。找出「廠商」「菜單品項」「員工名單」這類幾乎不變動的資料，但幾個高流量頁面每次都在重新問一次
+- 新增 `lib/cachedReferenceData.ts`，用 Next.js 的 `unstable_cache` 快取 60 秒：
+  - `getCachedActiveVendors()`：廠商清單（後台今日總覽用）
+  - `getCachedEmployees()`：員工名單（LIFF 選人頁、場次詳細頁「新增訂單」選人用）
+  - `getCachedActiveMenuItemsForVendor(vendorId)` / `getCachedActiveMenuItemsForVendors(vendorIds)`：指定廠商的菜單品項（場次詳細頁、**LIFF 點餐頁**——這頁是全公司流量最高的頁面，每個員工每天都要開）
+  - `unstable_cache` 內部不能碰 cookies，所以改用 `lib/supabase/admin.ts` 既有的 `createAdminClient()`（service role）讀，這份資料本來就是所有人看到的都一樣，沒有依登入者不同而變化的權限差異
+- **刻意不快取**：`/admin/vendors`（廠商管理，正在編輯這份資料的地方）、`daily_sessions`（場次開/關/取消狀態必須即時）、`orders`/`order_items`（訂單資料必須即時）——這些要嘛是編輯當下要立刻看到自己的結果，要嘛本來就是每分每秒在變的資料，不能快取
+- 取捨：改了廠商名稱或新增菜單品項後，LIFF 點餐頁最多要等 60 秒才會更新，考量到這類異動不常發生、也不是分秒必爭，可以接受
+- 用暫時拿掉登入驗證的方式（測完馬上還原）實際打過 `/liff`、`/liff/menu`、`/admin`、`/admin/sessions/[id]` 四個頁面，用真實資料確認廠商/菜單/員工都正確撈到，沒有任何錯誤
+
+### 2026-09-14（續2）：修正週結頁面兩個查詢沒有平行處理
+- 使用者反映後台左側標籤換頁還是慢。查 `/admin/settlements`（週結勾選）發現撈「本週訂單」跟「本週付款紀錄」是**一個等完才撈下一個**，明明兩者互不相依，改成 `Promise.all` 平行撈取
+- 測試時發現一個重要細節：這頁用暫時拿掉登入驗證的方式測，`orders`/`weekly_payments` 都回傳空陣列——一開始以為是改壞了，後來用 anon key 直接打 API 確認是 **RLS 本來就擋掉未登入的讀取**（這兩張表本來就不像 vendors/menu/employees 那樣開放 anon 讀取，訂單資料理當更嚴格），不是程式邏輯的問題。這頁的真正效果要請使用者實際登入測
+
+---
+
 ---
 
 ## 六、新對話接手時建議
@@ -238,4 +261,4 @@ git log --oneline -10
 
 ---
 
-最後更新：2026-07-28
+最後更新：2026-09-14

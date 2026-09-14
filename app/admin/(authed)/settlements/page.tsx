@@ -30,19 +30,29 @@ export default async function SettlementsPage({ searchParams }: Props) {
   // 撈本週所有 submitted 訂單（含週末，排除取消的場次和取消的訂單）
   // 範圍：本週週一 00:00 ~ 下週週一 00:00（Mon-Sun 全部包含）
   const nextWeekMonday = shiftWeek(range.start, 1);
-  const { data: orders, error: orderErr } = await supabase
-    .from('orders')
-    .select(`
-      id, employee_id, employee_name, total_amount, status, submitted_at,
-      session:daily_sessions ( id, status, order_date, kind, vendor:vendors ( name ) ),
-      items:order_items ( item_name, item_price, quantity, note )
-    `)
-    .gte('submitted_at', `${range.start}T00:00:00+08:00`)
-    .lt('submitted_at', `${nextWeekMonday}T00:00:00+08:00`)
-    .eq('status', 'submitted');
+  // 訂單跟付款紀錄互不相依，平行撈取，不用一個等完才撈下一個
+  const [{ data: orders, error: orderErr }, { data: payments, error: payErr }] = await Promise.all([
+    supabase
+      .from('orders')
+      .select(`
+        id, employee_id, employee_name, total_amount, status, submitted_at,
+        session:daily_sessions ( id, status, order_date, kind, vendor:vendors ( name ) ),
+        items:order_items ( item_name, item_price, quantity, note )
+      `)
+      .gte('submitted_at', `${range.start}T00:00:00+08:00`)
+      .lt('submitted_at', `${nextWeekMonday}T00:00:00+08:00`)
+      .eq('status', 'submitted'),
+    supabase
+      .from('weekly_payments')
+      .select('id, employee_id, employee_name, amount, paid_at, note, paid_by_admin:admin_users!weekly_payments_paid_by_fkey ( name )')
+      .eq('week_start', range.start),
+  ]);
 
   if (orderErr) {
     return <ErrorBox message={`載入訂單失敗：${orderErr.message}`} />;
+  }
+  if (payErr) {
+    return <ErrorBox message={`載入付款紀錄失敗：${payErr.message}`} />;
   }
 
   type RawOrder = {
@@ -95,16 +105,6 @@ export default async function SettlementsPage({ searchParams }: Props) {
   // 每位員工的訂單依日期排序
   for (const s of aggMap.values()) {
     s.orders.sort((a, b) => a.orderDate.localeCompare(b.orderDate));
-  }
-
-  // 撈本週的付款紀錄
-  const { data: payments, error: payErr } = await supabase
-    .from('weekly_payments')
-    .select('id, employee_id, employee_name, amount, paid_at, note, paid_by_admin:admin_users!weekly_payments_paid_by_fkey ( name )')
-    .eq('week_start', range.start);
-
-  if (payErr) {
-    return <ErrorBox message={`載入付款紀錄失敗：${payErr.message}`} />;
   }
 
   type RawPayment = {

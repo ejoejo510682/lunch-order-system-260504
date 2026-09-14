@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireRole } from '@/lib/auth/getCurrentAdmin';
 import { createClient } from '@/lib/supabase/server';
+import { getCachedActiveMenuItemsForVendor, getCachedEmployees } from '@/lib/cachedReferenceData';
 import { SessionDetailClient, type SessionData, type OrderForAdmin, type MenuItemOption, type EmployeeOption } from './SessionDetailClient';
 
 interface Props {
@@ -54,23 +55,12 @@ export default async function SessionDetailPage({ params }: Props) {
   const orders = (ordersRaw ?? []) as unknown as OrderForAdmin[];
 
   // 撈當前廠商的菜單品項，給編輯時用
-  let menuItems: MenuItemOption[] = [];
-  if (session.vendor) {
-    const { data: items } = await supabase
-      .from('menu_items')
-      .select('id, name, price')
-      .eq('vendor_id', session.vendor.id)
-      .eq('is_active', true)
-      .order('sort_order');
-    menuItems = (items ?? []) as MenuItemOption[];
-  }
+  const menuItems: MenuItemOption[] = session.vendor
+    ? ((await getCachedActiveMenuItemsForVendor(session.vendor.id)) as MenuItemOption[])
+    : [];
 
   // 撈員工列表（給「新增訂單」選人用）
-  const { data: empData } = await supabase
-    .from('employees')
-    .select('id, name')
-    .order('name');
-  const employees = (empData ?? []) as EmployeeOption[];
+  const employees = (await getCachedEmployees()) as EmployeeOption[];
 
   return (
     <div className="space-y-4">

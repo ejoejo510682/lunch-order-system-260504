@@ -6,8 +6,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    // 跳過 _next 靜態資源、favicon、圖片，其餘所有路由都更新 session
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
+  // 只有後台頁面會用到 Supabase Auth 的 session；LIFF 員工端第一階段沒有密碼驗證，
+  // 完全不需要每次都多花一趟連線去續期一個根本不存在的 session
+  matcher: ['/admin/:path*'],
 };

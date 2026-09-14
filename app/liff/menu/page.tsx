@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { getTodayInTaipei } from '@/lib/date';
+import { getCachedActiveMenuItemsForVendors } from '@/lib/cachedReferenceData';
 import { MenuClient, type KindData, type MenuItem } from './MenuClient';
 
 interface SessionRow {
@@ -43,16 +44,8 @@ export default async function MenuPage() {
 
   let menuItemsByVendor: Record<string, MenuItem[]> = {};
   if (openVendorIds.length > 0) {
-    const { data: items, error: itemsErr } = await supabase
-      .from('menu_items')
-      .select('id, vendor_id, name, price, sort_order')
-      .in('vendor_id', openVendorIds)
-      .eq('is_active', true)
-      .order('sort_order');
-    if (itemsErr) {
-      return <ErrorBox message={`載入菜單失敗：${itemsErr.message}`} />;
-    }
-    menuItemsByVendor = (items ?? []).reduce<Record<string, MenuItem[]>>((acc, it) => {
+    const items = await getCachedActiveMenuItemsForVendors(openVendorIds);
+    menuItemsByVendor = items.reduce<Record<string, MenuItem[]>>((acc, it) => {
       const list = acc[it.vendor_id] ?? [];
       list.push({ id: it.id, name: it.name, price: it.price });
       acc[it.vendor_id] = list;

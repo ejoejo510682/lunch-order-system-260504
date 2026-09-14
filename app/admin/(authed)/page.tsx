@@ -1,6 +1,7 @@
 import { requireAdmin } from '@/lib/auth/getCurrentAdmin';
 import { createClient } from '@/lib/supabase/server';
 import { getTodayInTaipei } from '@/lib/date';
+import { getCachedActiveVendors } from '@/lib/cachedReferenceData';
 import { TodayOverview, type SessionRow, type VendorOption, type SessionStats } from './TodayOverview';
 
 export default async function AdminHome() {
@@ -8,7 +9,7 @@ export default async function AdminHome() {
   const today = getTodayInTaipei();
   const supabase = await createClient();
 
-  const [sessionsRes, vendorsRes] = await Promise.all([
+  const [sessionsRes, vendorsData] = await Promise.all([
     supabase
       .from('daily_sessions')
       .select(`
@@ -18,18 +19,11 @@ export default async function AdminHome() {
         vendor:vendors ( id, name, phone )
       `)
       .eq('order_date', today),
-    supabase
-      .from('vendors')
-      .select('id, name, kind')
-      .eq('is_active', true)
-      .order('name'),
+    getCachedActiveVendors(),
   ]);
 
   if (sessionsRes.error) {
     return <ErrorBox message={`載入今日場次失敗：${sessionsRes.error.message}`} />;
-  }
-  if (vendorsRes.error) {
-    return <ErrorBox message={`載入廠商列表失敗：${vendorsRes.error.message}`} />;
   }
 
   const sessions = (sessionsRes.data ?? []) as unknown as SessionRow[];
@@ -54,7 +48,7 @@ export default async function AdminHome() {
   }
 
   const canEdit = admin.role === 'admin' || admin.role === 'orderer';
-  const vendors = (vendorsRes.data ?? []) as VendorOption[];
+  const vendors = vendorsData as VendorOption[];
 
   return (
     <TodayOverview
