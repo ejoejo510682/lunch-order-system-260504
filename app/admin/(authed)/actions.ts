@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { requireRole } from '@/lib/auth/getCurrentAdmin';
 import { getTodayInTaipei, buildTodayTimestamp } from '@/lib/date';
 
@@ -173,4 +174,40 @@ export async function cancelSession(
 
   revalidatePath(PATH);
   return { success: true };
+}
+
+// 清除「已取消」場次底下的所有訂單（硬刪除，非標記取消），讓場次能被重新開單
+// 只能對 status='cancelled' 的場次操作，避免誤刪還在進行中的訂單
+export async function clearCancelledSessionOrders(
+  sessionId: string,
+): Promise<{ ok: boolean; error?: string; deletedCount?: number }> {
+  await requireRole(['admin', 'orderer']);
+  if (!sessionId) return { ok: false, error: '無效的場次' };
+
+  const supabase = await createClient();
+  const { data: session } = await supabase
+    .from('daily_sessions')
+    .select('id, status')
+    .eq('id', sessionId)
+    .maybeSingle();
+
+  if (!session) return { ok: false, error: '場次不存在' };
+  if (session.status !== 'cancelled') {
+    return { ok: false, error: '只能清除已取消場次的訂單' };
+  }
+
+  // 用 service_role：orders 的 RLS 只開放 UPDATE，沒有 DELETE 政策
+  const adminSupabase = createAdminClient();
+  const { data: deleted, error } = await adminSupabase
+    .from('orders')
+    .delete()
+    .eq('session_id', sessionId)
+    .select('id');
+
+  if (error) return { ok: false, error: `清除失敗：${error.message}` };
+
+  revalidatePath(PATH);
+  revalidatePath(`/admin/sessions/${sessionId}`);
+  revalidatePath('/admin/settlements');
+  return { ok: true, deletedCount: deleted?.length ?? 0 };
 }

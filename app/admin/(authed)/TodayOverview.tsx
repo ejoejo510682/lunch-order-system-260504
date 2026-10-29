@@ -8,6 +8,7 @@ import {
   openSession,
   cancelSession,
   changeSessionVendor,
+  clearCancelledSessionOrders,
   type SessionActionState,
 } from './actions';
 
@@ -108,7 +109,8 @@ type DialogState =
   | { mode: 'closed' }
   | { mode: 'open' }
   | { mode: 'cancel' }
-  | { mode: 'change-vendor' };
+  | { mode: 'change-vendor' }
+  | { mode: 'clear-orders' };
 
 function SessionCard({
   kind,
@@ -167,6 +169,20 @@ function SessionCard({
                 {session.cancellation_reason && (
                   <p className="text-xs text-red-700 mt-0.5">原因：{session.cancellation_reason}</p>
                 )}
+                {canEdit && (stats?.count ?? 0) > 0 && (
+                  <>
+                    <p className="text-xs text-red-700 mt-2">
+                      底下還有 {stats?.count} 筆訂單，要先清除才能重新開單
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setDialog({ mode: 'clear-orders' })}
+                      className="mt-2 px-3 py-1.5 rounded-lg text-xs font-medium border border-red-300 text-red-700 hover:bg-red-100 transition"
+                    >
+                      🗑️ 清除訂單
+                    </button>
+                  </>
+                )}
               </div>
             )}
             <NoSessionView
@@ -202,6 +218,16 @@ function SessionCard({
       {dialog.mode === 'cancel' && session && (
         <Modal title={`取消「${label}」場次`} onClose={closeDialog}>
           <CancelSessionForm sessionId={session.id} kindLabel={label} stats={stats} onClose={closeDialog} />
+        </Modal>
+      )}
+
+      {dialog.mode === 'clear-orders' && session && (
+        <Modal title={`清除「${label}」已取消場次的訂單`} onClose={closeDialog}>
+          <ClearOrdersForm
+            sessionId={session.id}
+            orderCount={stats?.count ?? 0}
+            onClose={closeDialog}
+          />
         </Modal>
       )}
 
@@ -321,6 +347,74 @@ function ChangeVendorForm({
         </button>
       </div>
     </form>
+  );
+}
+
+// ---------- 清除訂單表單 ----------
+
+function ClearOrdersForm({
+  sessionId,
+  orderCount,
+  onClose,
+}: {
+  sessionId: string;
+  orderCount: number;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const handleConfirm = () => {
+    setError(null);
+    startTransition(async () => {
+      const r = await clearCancelledSessionOrders(sessionId);
+      if (!r.ok) {
+        setError(r.error ?? '清除失敗');
+        return;
+      }
+      onClose();
+      router.refresh();
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
+        <div className="font-medium">
+          確定要清除這 {orderCount} 筆訂單嗎？
+        </div>
+        <div className="text-xs mt-1 text-red-700">
+          因為場次已取消、沒有收費，這些訂單會直接從資料庫刪除，<b>無法復原</b>。
+          清除後才能對這個分類重新開單。
+        </div>
+      </div>
+
+      {error && (
+        <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      <div className="flex gap-2 justify-end pt-2">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={pending}
+          className="px-4 py-2 rounded-lg text-sm text-zinc-700 hover:bg-zinc-100 transition disabled:opacity-50"
+        >
+          返回
+        </button>
+        <button
+          type="button"
+          onClick={handleConfirm}
+          disabled={pending}
+          className="px-4 py-2 rounded-lg text-sm bg-red-600 hover:bg-red-700 text-white font-medium transition disabled:opacity-50"
+        >
+          {pending ? '清除中...' : '確定清除'}
+        </button>
+      </div>
+    </div>
   );
 }
 
