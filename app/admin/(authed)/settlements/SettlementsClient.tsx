@@ -139,7 +139,7 @@ function buildLineMessage(
     lines.push(`${s.employeeName} NT$ ${s.totalAmount}${paid}`);
   }
   lines.push('──────────');
-  lines.push('請週五結束前完成付款，完成後請通知訂餐員（付現、Linepay、轉帳皆可）');
+  lines.push('請下週一結束前完成付款，完成後請通知訂餐員（付現、Linepay、轉帳皆可）');
   return lines.join('\n');
 }
 
