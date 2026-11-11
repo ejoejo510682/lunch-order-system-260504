@@ -12,7 +12,7 @@ export const getCachedActiveVendors = unstable_cache(
     const supabase = createAdminClient();
     const { data } = await supabase
       .from('vendors')
-      .select('id, name, kind')
+      .select('id, name, kind, allow_freeform')
       .eq('is_active', true)
       .order('name');
     return data ?? [];

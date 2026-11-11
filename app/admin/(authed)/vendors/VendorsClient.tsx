@@ -13,6 +13,7 @@ interface Vendor {
   is_active: boolean;
   kind: 'food' | 'drink';
   menu_image_urls: string[];
+  allow_freeform: boolean;
   created_at: string;
 }
 
@@ -171,6 +172,11 @@ function VendorSection({
                     >
                       {v.name}
                     </Link>
+                    {v.allow_freeform && (
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                        自由填寫
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-sm text-zinc-600 truncate">
                     {v.phone ?? <span className="text-zinc-400">—</span>}

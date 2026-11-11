@@ -36,7 +36,7 @@ export default async function SettlementsPage({ searchParams }: Props) {
       .from('orders')
       .select(`
         id, employee_id, employee_name, total_amount, status, submitted_at,
-        session:daily_sessions ( id, status, order_date, kind, vendor:vendors ( name ) ),
+        session:daily_sessions ( id, status, order_date, kind, freeform_restaurant_name, vendor:vendors ( name, allow_freeform ) ),
         items:order_items ( item_name, item_price, quantity, note )
       `)
       .gte('submitted_at', `${range.start}T00:00:00+08:00`)
@@ -66,7 +66,8 @@ export default async function SettlementsPage({ searchParams }: Props) {
       status: 'open' | 'closed' | 'cancelled';
       order_date: string;
       kind: 'food' | 'drink';
-      vendor: { name: string } | null;
+      freeform_restaurant_name: string | null;
+      vendor: { name: string; allow_freeform: boolean } | null;
     } | null;
     items: { item_name: string; item_price: number; quantity: number; note: string | null }[];
   };
@@ -81,7 +82,9 @@ export default async function SettlementsPage({ searchParams }: Props) {
       sessionId:    o.session?.id ?? '',
       orderDate:    o.session?.order_date ?? '',
       kind:         o.session?.kind ?? 'food',
-      vendorName:   o.session?.vendor?.name ?? '（廠商已刪除）',
+      vendorName:   o.session?.vendor?.allow_freeform
+        ? (o.session.freeform_restaurant_name ?? o.session.vendor.name)
+        : (o.session?.vendor?.name ?? '（廠商已刪除）'),
       totalAmount:  o.total_amount,
       items:        o.items ?? [],
     };

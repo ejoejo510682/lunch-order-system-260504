@@ -16,7 +16,8 @@ export default async function AdminHome() {
         id, kind, status, order_date,
         auto_close_at, closed_at,
         cancelled_at, cancellation_reason,
-        vendor:vendors ( id, name, phone )
+        freeform_restaurant_name,
+        vendor:vendors ( id, name, phone, allow_freeform )
       `)
       .eq('order_date', today),
     getCachedActiveVendors(),

@@ -10,11 +10,13 @@ interface SessionRow {
   vendor_id: string;
   cancelled_at: string | null;
   cancellation_reason: string | null;
+  freeform_restaurant_name: string | null;
   vendor: {
     id: string;
     name: string;
     phone: string | null;
     menu_image_urls: string[];
+    allow_freeform: boolean;
   } | null;
 }
 
@@ -27,7 +29,8 @@ export default async function MenuPage() {
     .select(`
       id, kind, status, vendor_id,
       cancelled_at, cancellation_reason,
-      vendor:vendors ( id, name, phone, menu_image_urls )
+      freeform_restaurant_name,
+      vendor:vendors ( id, name, phone, menu_image_urls, allow_freeform )
     `)
     .eq('order_date', today);
 
@@ -76,12 +79,15 @@ function buildKindData(
     name: '（廠商已刪除）',
     phone: null,
     menu_image_urls: [],
+    allow_freeform: false,
   };
   return {
     state: 'open',
     sessionId: session.id,
     vendor,
     items: menuItemsByVendor[session.vendor_id] ?? [],
+    freeform: vendor.allow_freeform,
+    restaurantName: session.freeform_restaurant_name,
   };
 }
 

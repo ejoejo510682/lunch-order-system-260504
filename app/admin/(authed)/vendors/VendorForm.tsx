@@ -11,6 +11,7 @@ interface Vendor {
   note: string | null;
   kind: 'food' | 'drink';
   menu_image_urls: string[];
+  allow_freeform: boolean;
 }
 
 interface Props {
@@ -109,6 +110,26 @@ export function VendorForm({ initialData, onClose }: Props) {
           disabled={pending}
           className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition disabled:bg-zinc-50 resize-none"
         />
+      </div>
+
+      <div>
+        <label className="flex items-start gap-2 px-3 py-2.5 rounded-lg border border-zinc-300 cursor-pointer hover:bg-zinc-50 has-[:checked]:bg-blue-50 has-[:checked]:border-blue-400 transition">
+          <input
+            type="checkbox"
+            name="allow_freeform"
+            defaultChecked={initialData?.allow_freeform ?? false}
+            disabled={pending}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="block text-sm font-medium text-zinc-900">
+              自由填寫（不用固定菜單）
+            </span>
+            <span className="block text-xs text-zinc-500 mt-0.5">
+              適合直接用 foodpanda 代點的情境。開單時填當天實際餐廳，員工點餐會變成空白表單自己填品項、數量、單價，不會顯示固定菜單
+            </span>
+          </span>
+        </label>
       </div>
 
       {state.error && (

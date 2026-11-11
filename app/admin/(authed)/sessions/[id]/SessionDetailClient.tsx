@@ -15,7 +15,8 @@ export interface SessionData {
   closed_at: string | null;
   cancelled_at: string | null;
   cancellation_reason: string | null;
-  vendor: { id: string; name: string; phone: string | null; note: string | null } | null;
+  freeform_restaurant_name: string | null;
+  vendor: { id: string; name: string; phone: string | null; note: string | null; allow_freeform: boolean } | null;
 }
 
 export interface OrderForAdmin {
@@ -82,9 +83,16 @@ export function SessionDetailClient({
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <span className="text-xl">{kindCfg.emoji}</span>
           <h1 className="text-lg sm:text-xl font-bold text-zinc-900">
-            {session.vendor?.name ?? '（廠商已刪除）'}
+            {session.vendor?.allow_freeform
+              ? (session.freeform_restaurant_name ?? session.vendor.name)
+              : (session.vendor?.name ?? '（廠商已刪除）')}
           </h1>
           <SessionBadge status={session.status} />
+          {session.vendor?.allow_freeform && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+              自由填寫
+            </span>
+          )}
         </div>
         {session.vendor?.phone && (
           <p className="text-sm text-zinc-600">

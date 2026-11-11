@@ -26,6 +26,7 @@ export async function createVendor(
   const phone = String(formData.get('phone') ?? '').trim();
   const note  = String(formData.get('note')  ?? '').trim();
   const kind  = parseKind(formData);
+  const allowFreeform = formData.get('allow_freeform') === 'on';
 
   if (!name) return { error: '請輸入廠商名稱' };
   if (!kind) return { error: '請選擇分類（吃的 / 喝的）' };
@@ -36,6 +37,7 @@ export async function createVendor(
     kind,
     phone: phone || null,
     note:  note  || null,
+    allow_freeform: allowFreeform,
   });
 
   if (error) return { error: `新增失敗：${error.message}` };
@@ -55,6 +57,7 @@ export async function updateVendor(
   const phone = String(formData.get('phone') ?? '').trim();
   const note  = String(formData.get('note')  ?? '').trim();
   const kind  = parseKind(formData);
+  const allowFreeform = formData.get('allow_freeform') === 'on';
 
   if (!name) return { error: '請輸入廠商名稱' };
   if (!kind) return { error: '請選擇分類（吃的 / 喝的）' };
@@ -67,6 +70,7 @@ export async function updateVendor(
       kind,
       phone: phone || null,
       note:  note  || null,
+      allow_freeform: allowFreeform,
     })
     .eq('id', id);
 

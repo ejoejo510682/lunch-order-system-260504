@@ -21,7 +21,8 @@ export default async function SessionDetailPage({ params }: Props) {
       id, kind, status, order_date,
       auto_close_at, closed_at,
       cancelled_at, cancellation_reason,
-      vendor:vendors ( id, name, phone, note )
+      freeform_restaurant_name,
+      vendor:vendors ( id, name, phone, note, allow_freeform )
     `)
     .eq('id', id)
     .maybeSingle();

@@ -20,6 +20,7 @@ export interface VendorOption {
   id: string;
   name: string;
   kind: Kind;
+  allow_freeform: boolean;
 }
 
 export interface SessionRow {
@@ -31,7 +32,8 @@ export interface SessionRow {
   closed_at: string | null;
   cancelled_at: string | null;
   cancellation_reason: string | null;
-  vendor: { id: string; name: string; phone: string | null } | null;
+  freeform_restaurant_name: string | null;
+  vendor: { id: string; name: string; phone: string | null; allow_freeform: boolean } | null;
 }
 
 export interface SessionStats {
@@ -489,7 +491,9 @@ function SessionInfoView({
     <div className="space-y-4">
       <div className="flex items-baseline gap-3">
         <div className="text-base font-medium text-zinc-900">
-          {session.vendor?.name ?? <span className="text-zinc-400">廠商已刪除</span>}
+          {session.vendor?.allow_freeform
+            ? (session.freeform_restaurant_name ?? session.vendor.name)
+            : (session.vendor?.name ?? <span className="text-zinc-400">廠商已刪除</span>)}
         </div>
         {session.vendor?.phone && (
           <div className="text-xs text-zinc-500">{session.vendor.phone}</div>
@@ -554,10 +558,13 @@ function OpenSessionForm({
   onClose: () => void;
 }) {
   const [state, formAction, pending] = useActionState(openSession, initialState);
+  const [vendorId, setVendorId] = useState('');
 
   useEffect(() => {
     if (state.success) onClose();
   }, [state.success, onClose]);
+
+  const selectedVendor = vendors.find((v) => v.id === vendorId);
 
   return (
     <form action={formAction} className="space-y-4">
@@ -572,7 +579,8 @@ function OpenSessionForm({
           name="vendor_id"
           required
           disabled={pending}
-          defaultValue=""
+          value={vendorId}
+          onChange={(e) => setVendorId(e.target.value)}
           className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition disabled:bg-zinc-50"
         >
           <option value="" disabled>
@@ -580,11 +588,31 @@ function OpenSessionForm({
           </option>
           {vendors.map((v) => (
             <option key={v.id} value={v.id}>
-              {v.name}
+              {v.name}{v.allow_freeform ? '（自由填寫）' : ''}
             </option>
           ))}
         </select>
       </div>
+
+      {selectedVendor?.allow_freeform && (
+        <div>
+          <label htmlFor="freeform_restaurant_name" className="block text-sm font-medium text-zinc-700 mb-1">
+            今天實際的餐廳名稱 <span className="text-red-500">*</span>
+          </label>
+          <input
+            id="freeform_restaurant_name"
+            name="freeform_restaurant_name"
+            type="text"
+            required
+            placeholder="例：foodpanda - 麥當勞"
+            disabled={pending}
+            className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition disabled:bg-zinc-50"
+          />
+          <p className="text-xs text-zinc-500 mt-1">
+            這家廠商沒有固定菜單，員工點餐時會看到空白表單自己填品項、數量、單價
+          </p>
+        </div>
+      )}
 
       {/* 不結單機制：場次永遠 open，要結束就「取消整場」 */}
       <input type="hidden" name="auto_close" value="" />

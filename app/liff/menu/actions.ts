@@ -7,6 +7,7 @@ export interface SubmitOrderInput {
   employeeId: string;
   sessionId: string;
   items: { menuItemId: string; quantity: number; note?: string }[];
+  freeformItems?: { name: string; price: number; quantity: number; note?: string }[];
 }
 
 export interface SubmitOrderResult {
@@ -22,11 +23,13 @@ export interface SubmitOrderError {
 const EDITABLE_MINUTES = 5;
 
 export async function submitOrder(input: SubmitOrderInput): Promise<SubmitOrderResult | SubmitOrderError> {
-  const { employeeId, sessionId, items } = input;
+  const { employeeId, sessionId, items, freeformItems } = input;
 
   if (!employeeId) return { ok: false, error: '缺少身份資訊，請重新選擇姓名' };
   if (!sessionId)  return { ok: false, error: '無效的場次' };
-  if (!items || items.length === 0) return { ok: false, error: '請至少選擇一個品項' };
+  if ((!items || items.length === 0) && (!freeformItems || freeformItems.length === 0)) {
+    return { ok: false, error: '請至少選擇一個品項' };
+  }
 
   const supabase = createAdminClient();
 
@@ -43,7 +46,7 @@ export async function submitOrder(input: SubmitOrderInput): Promise<SubmitOrderR
   // 2. 驗證場次（必須是 open 才能下單）
   const { data: session, error: sessionErr } = await supabase
     .from('daily_sessions')
-    .select('id, vendor_id, status, kind')
+    .select('id, vendor_id, status, kind, vendor:vendors ( allow_freeform )')
     .eq('id', sessionId)
     .maybeSingle();
 
@@ -53,46 +56,69 @@ export async function submitOrder(input: SubmitOrderInput): Promise<SubmitOrderR
     return { ok: false, error: '此場次已結單或被取消，無法下單' };
   }
 
-  // 3. 驗證品項
-  const menuItemIds = items.map((i) => i.menuItemId);
-  const { data: menuItems, error: itemsErr } = await supabase
-    .from('menu_items')
-    .select('id, name, price, vendor_id, is_active')
-    .in('id', menuItemIds);
+  const isFreeform = (session.vendor as unknown as { allow_freeform: boolean } | null)?.allow_freeform ?? false;
 
-  if (itemsErr) return { ok: false, error: `品項驗證失敗：${itemsErr.message}` };
-  if (!menuItems || menuItems.length !== menuItemIds.length) {
-    return { ok: false, error: '部分品項已下架' };
-  }
-  for (const mi of menuItems) {
-    if (mi.vendor_id !== session.vendor_id) {
-      return { ok: false, error: '品項與場次廠商不符' };
+  let orderItems: { menu_item_id: string | null; item_name: string; item_price: number; quantity: number; note: string | null }[];
+
+  if (isFreeform) {
+    // 自由填寫廠商：直接用員工手填的品項，不比對 menu_items
+    const rows = freeformItems ?? [];
+    if (rows.length === 0) return { ok: false, error: '請至少填寫一個品項' };
+    for (const r of rows) {
+      if (!r.name?.trim()) return { ok: false, error: '每個品項都要填名稱' };
+      if (!Number.isInteger(r.quantity) || r.quantity <= 0) return { ok: false, error: `「${r.name}」的數量必須是正整數` };
+      if (!Number.isInteger(r.price) || r.price < 0) return { ok: false, error: `「${r.name}」的單價不正確` };
     }
-    if (!mi.is_active) {
-      return { ok: false, error: `「${mi.name}」已下架，請移除` };
+    orderItems = rows.map((r) => ({
+      menu_item_id: null,
+      item_name:    r.name.trim(),
+      item_price:   r.price,
+      quantity:     r.quantity,
+      note:         r.note?.trim() || null,
+    }));
+  } else {
+    // 3. 驗證品項
+    const menuItemIds = items.map((i) => i.menuItemId);
+    const { data: menuItems, error: itemsErr } = await supabase
+      .from('menu_items')
+      .select('id, name, price, vendor_id, is_active')
+      .in('id', menuItemIds);
+
+    if (itemsErr) return { ok: false, error: `品項驗證失敗：${itemsErr.message}` };
+    if (!menuItems || menuItems.length !== menuItemIds.length) {
+      return { ok: false, error: '部分品項已下架' };
     }
+    for (const mi of menuItems) {
+      if (mi.vendor_id !== session.vendor_id) {
+        return { ok: false, error: '品項與場次廠商不符' };
+      }
+      if (!mi.is_active) {
+        return { ok: false, error: `「${mi.name}」已下架，請移除` };
+      }
+    }
+
+    // 4. 驗證數量
+    for (const it of items) {
+      if (!Number.isInteger(it.quantity) || it.quantity <= 0) {
+        return { ok: false, error: '數量必須是正整數' };
+      }
+    }
+
+    // 5. 計算總額（用當下菜單價格做快照）
+    const priceMap = new Map(menuItems.map((m) => [m.id, m]));
+    orderItems = items.map((it) => {
+      const m = priceMap.get(it.menuItemId)!;
+      const trimmedNote = it.note?.trim() ?? '';
+      return {
+        menu_item_id: m.id,
+        item_name:    m.name,
+        item_price:   m.price,
+        quantity:     it.quantity,
+        note:         trimmedNote || null,
+      };
+    });
   }
 
-  // 4. 驗證數量
-  for (const it of items) {
-    if (!Number.isInteger(it.quantity) || it.quantity <= 0) {
-      return { ok: false, error: '數量必須是正整數' };
-    }
-  }
-
-  // 5. 計算總額（用當下菜單價格做快照）
-  const priceMap = new Map(menuItems.map((m) => [m.id, m]));
-  const orderItems = items.map((it) => {
-    const m = priceMap.get(it.menuItemId)!;
-    const trimmedNote = it.note?.trim() ?? '';
-    return {
-      menu_item_id: m.id,
-      item_name:    m.name,
-      item_price:   m.price,
-      quantity:     it.quantity,
-      note:         trimmedNote || null,
-    };
-  });
   const totalAmount = orderItems.reduce((sum, oi) => sum + oi.item_price * oi.quantity, 0);
 
   // 6. 寫入 orders + order_items

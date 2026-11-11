@@ -59,7 +59,7 @@ export async function getWeeklyOrders(employeeId: string): Promise<WeeklyResult 
     .from('orders')
     .select(`
       id, total_amount, status, submitted_at,
-      session:daily_sessions ( order_date, kind, status, vendor:vendors ( name ) ),
+      session:daily_sessions ( order_date, kind, status, freeform_restaurant_name, vendor:vendors ( name, allow_freeform ) ),
       items:order_items ( item_name, item_price, quantity, note, modified_at )
     `)
     .eq('employee_id', employeeId)
@@ -79,7 +79,8 @@ export async function getWeeklyOrders(employeeId: string): Promise<WeeklyResult 
       order_date: string;
       kind: 'food' | 'drink';
       status: 'open' | 'closed' | 'cancelled';
-      vendor: { name: string } | null;
+      freeform_restaurant_name: string | null;
+      vendor: { name: string; allow_freeform: boolean } | null;
     } | null;
     items: RawItem[];
   };
@@ -91,7 +92,9 @@ export async function getWeeklyOrders(employeeId: string): Promise<WeeklyResult 
     submitted_at:   o.submitted_at,
     order_date:     o.session?.order_date ?? '',
     kind:           o.session?.kind ?? 'food',
-    vendor_name:    o.session?.vendor?.name ?? null,
+    vendor_name:    o.session?.vendor?.allow_freeform
+      ? (o.session.freeform_restaurant_name ?? o.session.vendor.name)
+      : (o.session?.vendor?.name ?? null),
     session_status: o.session?.status ?? 'open',
     items:          o.items ?? [],
     is_modified:    (o.items ?? []).some((it) => it.modified_at !== null),

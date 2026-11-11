@@ -28,7 +28,16 @@ export type KindData =
       sessionId: string;
       vendor: VendorWithImages;
       items: MenuItem[];
+      freeform: boolean;
+      restaurantName: string | null;
     };
+
+export interface FreeformRow {
+  localId: string;
+  name: string;
+  price: string;
+  qty: string;
+}
 
 type Kind = 'food' | 'drink';
 
@@ -58,6 +67,10 @@ export function MenuClient({
 
   // 統一購物車：menuItemId → quantity
   const [cart, setCart] = useState<Record<string, number>>({});
+
+  // 自由填寫廠商（例如 foodpanda 代點）：每個分類自己的手填品項列表
+  const [foodFreeform, setFoodFreeform]   = useState<FreeformRow[]>([emptyFreeformRow()]);
+  const [drinkFreeform, setDrinkFreeform] = useState<FreeformRow[]>([emptyFreeformRow()]);
 
   // 備註：每個分類有自己的訂單備註（會套用到該分類的所有品項）
   const [foodNote, setFoodNote]   = useState('');
@@ -110,10 +123,25 @@ export function MenuClient({
     return { items, subtotal };
   };
 
+  // 自由填寫：過濾掉沒填品項名稱/數量/單價不合法的列
+  const validFreeformRows = (rows: FreeformRow[]) =>
+    rows.filter((r) => r.name.trim() && Number(r.qty) > 0 && Number(r.price) >= 0 && r.price !== '');
+
+  const groupFreeformCart = (rows: FreeformRow[]) => {
+    const valid = validFreeformRows(rows);
+    const subtotal = valid.reduce((s, r) => s + Number(r.price) * Number(r.qty), 0);
+    return { rows: valid, subtotal };
+  };
+
   const foodCart  = groupCart(food);
   const drinkCart = groupCart(drink);
-  const totalCount = foodCart.items.reduce((s, it) => s + it.qty, 0) + drinkCart.items.reduce((s, it) => s + it.qty, 0);
-  const totalAmount = foodCart.subtotal + drinkCart.subtotal;
+  const foodFreeformCart  = groupFreeformCart(foodFreeform);
+  const drinkFreeformCart = groupFreeformCart(drinkFreeform);
+
+  const totalCount =
+    foodCart.items.reduce((s, it) => s + it.qty, 0) + drinkCart.items.reduce((s, it) => s + it.qty, 0) +
+    foodFreeformCart.rows.reduce((s, r) => s + Number(r.qty), 0) + drinkFreeformCart.rows.reduce((s, r) => s + Number(r.qty), 0);
+  const totalAmount = foodCart.subtotal + drinkCart.subtotal + foodFreeformCart.subtotal + drinkFreeformCart.subtotal;
 
   const handleQuantity = (itemId: string, delta: number) => {
     setCart((prev) => {
@@ -135,22 +163,28 @@ export function MenuClient({
       const errors: string[] = [];
 
       // 先送吃的
-      if (foodCart.items.length > 0 && food.state === 'open') {
+      if ((foodCart.items.length > 0 || foodFreeformCart.rows.length > 0) && food.state === 'open') {
         const r = await submitOrder({
           employeeId: identity.id,
           sessionId:  food.sessionId,
           items:      foodCart.items.map((it) => ({ menuItemId: it.id, quantity: it.qty, note: foodNote })),
+          freeformItems: foodFreeformCart.rows.map((row) => ({
+            name: row.name.trim(), price: Number(row.price), quantity: Number(row.qty), note: foodNote,
+          })),
         });
         if (r.ok) orderIds.push(r.orderId);
         else errors.push(`吃的：${r.error}`);
       }
 
       // 再送喝的
-      if (drinkCart.items.length > 0 && drink.state === 'open') {
+      if ((drinkCart.items.length > 0 || drinkFreeformCart.rows.length > 0) && drink.state === 'open') {
         const r = await submitOrder({
           employeeId: identity.id,
           sessionId:  drink.sessionId,
           items:      drinkCart.items.map((it) => ({ menuItemId: it.id, quantity: it.qty, note: drinkNote })),
+          freeformItems: drinkFreeformCart.rows.map((row) => ({
+            name: row.name.trim(), price: Number(row.price), quantity: Number(row.qty), note: drinkNote,
+          })),
         });
         if (r.ok) orderIds.push(r.orderId);
         else errors.push(`喝的：${r.error}`);
@@ -162,6 +196,8 @@ export function MenuClient({
       }
 
       setCart({});
+      setFoodFreeform([emptyFreeformRow()]);
+      setDrinkFreeform([emptyFreeformRow()]);
       setFoodNote('');
       setDrinkNote('');
       setCartExpanded(false);
@@ -183,7 +219,9 @@ export function MenuClient({
         <div className="px-4 pt-2 pb-3 bg-white sticky top-0 z-10 border-b border-zinc-100">
           <div className="grid grid-cols-2 gap-2">
             {visibleKinds.map((k) => {
-              const dotShown = (k === 'food' ? foodCart.items : drinkCart.items).length > 0;
+              const dotShown = k === 'food'
+                ? foodCart.items.length > 0 || foodFreeformCart.rows.length > 0
+                : drinkCart.items.length > 0 || drinkFreeformCart.rows.length > 0;
               return (
                 <button
                   key={k}
@@ -211,7 +249,13 @@ export function MenuClient({
       )}
 
       <main className="flex-1 px-4 py-4">
-        <KindSection kindData={currentData} cart={cart} onQuantity={handleQuantity} />
+        <KindSection
+          kindData={currentData}
+          cart={cart}
+          onQuantity={handleQuantity}
+          freeformRows={activeKind === 'food' ? foodFreeform : drinkFreeform}
+          onFreeformChange={activeKind === 'food' ? setFoodFreeform : setDrinkFreeform}
+        />
       </main>
 
       {totalCount > 0 && (
@@ -255,14 +299,22 @@ function Header({ identity }: { identity: SavedIdentity }) {
   );
 }
 
+function emptyFreeformRow(): FreeformRow {
+  return { localId: Math.random().toString(36).slice(2), name: '', price: '', qty: '1' };
+}
+
 function KindSection({
   kindData,
   cart,
   onQuantity,
+  freeformRows,
+  onFreeformChange,
 }: {
   kindData: KindData;
   cart: Record<string, number>;
   onQuantity: (itemId: string, delta: number) => void;
+  freeformRows: FreeformRow[];
+  onFreeformChange: (rows: FreeformRow[]) => void;
 }) {
   if (kindData.state === 'closed') {
     return (
@@ -282,6 +334,22 @@ function KindSection({
     );
   }
   if (kindData.state !== 'open') return null;
+
+  if (kindData.freeform) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-base font-bold text-zinc-900">
+            {kindData.restaurantName ?? kindData.vendor.name}
+          </h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            這一場沒有固定菜單，請自己填寫實際點的品項、數量、單價
+          </p>
+        </div>
+        <FreeformForm rows={freeformRows} onChange={onFreeformChange} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -319,6 +387,83 @@ function KindSection({
           })}
         </ul>
       )}
+    </div>
+  );
+}
+
+function FreeformForm({
+  rows,
+  onChange,
+}: {
+  rows: FreeformRow[];
+  onChange: (rows: FreeformRow[]) => void;
+}) {
+  const updateRow = (localId: string, patch: Partial<FreeformRow>) => {
+    onChange(rows.map((r) => (r.localId === localId ? { ...r, ...patch } : r)));
+  };
+  const removeRow = (localId: string) => {
+    const next = rows.filter((r) => r.localId !== localId);
+    onChange(next.length > 0 ? next : [emptyFreeformRow()]);
+  };
+  const addRow = () => onChange([...rows, emptyFreeformRow()]);
+
+  return (
+    <div className="space-y-3">
+      {rows.map((row, i) => (
+        <div key={row.localId} className="bg-white border border-zinc-200 rounded-xl p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-400">第 {i + 1} 項</span>
+            {rows.length > 1 && (
+              <button
+                type="button"
+                onClick={() => removeRow(row.localId)}
+                className="text-xs text-red-500 hover:text-red-700"
+              >
+                刪除
+              </button>
+            )}
+          </div>
+          <input
+            type="text"
+            value={row.name}
+            onChange={(e) => updateRow(row.localId, { name: e.target.value })}
+            placeholder="品項名稱（例：大麥克餐）"
+            maxLength={100}
+            className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-100 outline-none"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[11px] text-zinc-500 mb-0.5">數量</label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                value={row.qty}
+                onChange={(e) => updateRow(row.localId, { qty: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-100 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] text-zinc-500 mb-0.5">單價 (NT$)</label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={row.price}
+                onChange={(e) => updateRow(row.localId, { price: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-100 outline-none"
+              />
+            </div>
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={addRow}
+        className="w-full py-2.5 rounded-lg border border-dashed border-zinc-300 text-sm text-zinc-600 hover:bg-zinc-50 transition"
+      >
+        + 新增一項
+      </button>
     </div>
   );
 }
@@ -393,8 +538,8 @@ function CartBar({
   onSubmit: () => void;
   onQuantity: (itemId: string, delta: number) => void;
 }) {
-  const foodVendorName  = food.state  === 'open' ? food.vendor.name  : null;
-  const drinkVendorName = drink.state === 'open' ? drink.vendor.name : null;
+  const foodVendorName  = food.state  === 'open' ? (food.freeform  ? food.restaurantName  ?? food.vendor.name  : food.vendor.name)  : null;
+  const drinkVendorName = drink.state === 'open' ? (drink.freeform ? drink.restaurantName ?? drink.vendor.name : drink.vendor.name) : null;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-20 pointer-events-none">

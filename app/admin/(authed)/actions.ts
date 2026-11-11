@@ -36,6 +36,7 @@ export async function openSession(
   const kind       = parseKind(formData.get('kind'));
   const vendorId   = String(formData.get('vendor_id') ?? '');
   const autoClose  = parseAutoClose(formData.get('auto_close'));
+  const freeformRestaurantName = String(formData.get('freeform_restaurant_name') ?? '').trim();
 
   if (!kind)            return { error: '無效的分類' };
   if (!vendorId)        return { error: '請選擇廠商' };
@@ -43,6 +44,16 @@ export async function openSession(
 
   const supabase = await createClient();
   const today = getTodayInTaipei();
+
+  const { data: vendor } = await supabase
+    .from('vendors')
+    .select('allow_freeform')
+    .eq('id', vendorId)
+    .maybeSingle();
+  if (!vendor) return { error: '廠商不存在' };
+  if (vendor.allow_freeform && !freeformRestaurantName) {
+    return { error: '這家廠商是自由填寫，請填今天實際的餐廳名稱' };
+  }
 
   // 嘗試先刪除同日同類別的「已取消」場次（若還有訂單會被 FK 擋下，下面 INSERT 也會 23505 失敗）
   await supabase
@@ -58,6 +69,7 @@ export async function openSession(
     kind,
     auto_close_at: autoClose ? buildTodayTimestamp(autoClose) : null,
     created_by:    admin.id,
+    freeform_restaurant_name: vendor.allow_freeform ? freeformRestaurantName : null,
   });
 
   if (error) {

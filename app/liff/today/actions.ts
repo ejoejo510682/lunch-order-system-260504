@@ -53,7 +53,7 @@ export async function getTodayOrders(employeeId: string): Promise<TodayResult | 
     .from('orders')
     .select(`
       id, total_amount, status, submitted_at, editable_until,
-      session:daily_sessions ( order_date, kind, status, cancellation_reason, vendor:vendors ( name ) ),
+      session:daily_sessions ( order_date, kind, status, cancellation_reason, freeform_restaurant_name, vendor:vendors ( name, allow_freeform ) ),
       items:order_items (
         item_name, item_price, quantity, note,
         modified_at, modified_reason,
@@ -85,7 +85,8 @@ export async function getTodayOrders(employeeId: string): Promise<TodayResult | 
       kind: 'food' | 'drink';
       status: 'open' | 'closed' | 'cancelled';
       cancellation_reason: string | null;
-      vendor: { name: string } | null;
+      freeform_restaurant_name: string | null;
+      vendor: { name: string; allow_freeform: boolean } | null;
     } | null;
     items: RawItem[];
   };
@@ -99,7 +100,9 @@ export async function getTodayOrders(employeeId: string): Promise<TodayResult | 
       submitted_at:          o.submitted_at,
       editable_until:        o.editable_until,
       kind:                  o.session?.kind ?? 'food',
-      vendor_name:           o.session?.vendor?.name ?? null,
+      vendor_name:           o.session?.vendor?.allow_freeform
+        ? (o.session.freeform_restaurant_name ?? o.session.vendor.name)
+        : (o.session?.vendor?.name ?? null),
       session_status:        o.session?.status ?? 'open',
       session_cancel_reason: o.session?.cancellation_reason ?? null,
       items: (o.items ?? []).map((it) => ({
